@@ -101,6 +101,8 @@ U64 knight_attacks[64];
 
 //king attacks table [square]
 U64 king_attacks[64];
+//bishop attacks table [square]
+U64 bishop_attacks[64];
 
 //generate pawn attacks
 
@@ -173,6 +175,26 @@ U64 mask_king_attacks(int square)
 
 	return attacks;
 }
+//generate bishop attacks
+U64 mask_bishop_attacks(int square)
+{
+	//initialize attacks bitboard
+	U64 attacks = 0ULL;
+	//initialize ranks and files
+	int r, f;
+	//initialize target ranks and files
+	int tr = square / 8;
+	int tf = square % 8;
+	//mask bishop occupancy 
+	for (r = tr + 1, f = tf + 1; r <= 6 && f <= 6; r++, f++) attacks |= (1ULL << (r * 8 + f)); //south east
+	for (r = tr - 1, f = tf + 1; r >= 1 && f <= 6; r--, f++) attacks |= (1ULL << (r * 8 + f)); //north east
+	for (r = tr - 1, f = tf - 1; r >= 1 && f >= 1; r--, f--) attacks |= (1ULL << (r * 8 + f)); //north west
+	for (r = tr + 1, f = tf - 1; r <= 6 && f >= 1; r++, f--) attacks |= (1ULL << (r * 8 + f)); //south west
+	
+	//return attack bitboard
+
+	return attacks;
+}
 
 
 
@@ -191,6 +213,8 @@ void init_attacks()
 		knight_attacks[square] = mask_knight_attacks(square);
 		//initialize king attacks
 		king_attacks[square] = mask_king_attacks(square);
+		//initialize bishop attacks
+		bishop_attacks[square] = mask_bishop_attacks(square);
 	}
 }
  
@@ -202,14 +226,11 @@ int main()
 	//loop over board squares
 	for (int square = 0; square < 64; square++)
 	{
-		print_bitboard(king_attacks[square]);
+		printf("current square: %d", square);
+		print_bitboard(bishop_attacks[square]);
 	}
 	
+	//print_bitboard(mask_bishop_attacks(d4));
 	
-
-
-
-
-
 	return 0;
 }
