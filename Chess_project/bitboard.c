@@ -103,6 +103,12 @@ U64 knight_attacks[64];
 U64 king_attacks[64];
 //bishop attacks table [square]
 U64 bishop_attacks[64];
+//rook attacks table [square]
+U64 rook_attacks[64];
+
+
+
+
 
 //generate pawn attacks
 
@@ -185,12 +191,104 @@ U64 mask_bishop_attacks(int square)
 	//initialize target ranks and files
 	int tr = square / 8;
 	int tf = square % 8;
-	//mask bishop occupancy 
+	//mask relevant bishop occupancy 
 	for (r = tr + 1, f = tf + 1; r <= 6 && f <= 6; r++, f++) attacks |= (1ULL << (r * 8 + f)); //south east
 	for (r = tr - 1, f = tf + 1; r >= 1 && f <= 6; r--, f++) attacks |= (1ULL << (r * 8 + f)); //north east
 	for (r = tr - 1, f = tf - 1; r >= 1 && f >= 1; r--, f--) attacks |= (1ULL << (r * 8 + f)); //north west
 	for (r = tr + 1, f = tf - 1; r <= 6 && f >= 1; r++, f--) attacks |= (1ULL << (r * 8 + f)); //south west
 	
+	//return attack bitboard
+
+	return attacks;
+}
+//generate rook attacks
+U64 mask_rook_attacks(int square)
+{
+	//initialize attacks bitboard
+	U64 attacks = 0ULL;
+	//initialize ranks and files
+	int r, f;
+	//initialize target ranks and files
+	int tr = square / 8;
+	int tf = square % 8;
+	//mask relevant rook occupancy 
+	for (r = tr + 1; r <= 6 ; r++) attacks |= (1ULL << (r * 8 + tf )); //south 
+	for (r = tr - 1; r >= 1; r--) attacks |= (1ULL << (r * 8 + tf)); //north
+	for (f = tf + 1; f <= 6; f++) attacks |= (1ULL << (tr*8 + f)); //east
+	for (f = tf - 1; f >= 1; f--) attacks |= (1ULL << (tr * 8 + f)); //west
+
+	//return attack bitboard
+
+	return attacks;
+}
+//generate bishop attacks irl
+U64 bishop_attacks_irl(int square,U64 block)
+{
+	//initialize attacks bitboard
+	U64 attacks = 0ULL;
+	//initialize ranks and files
+	int r, f;
+	//initialize target ranks and files
+	int tr = square / 8;
+	int tf = square % 8;
+	//generate bishop attacks
+	for (r = tr + 1, f = tf + 1; r <= 7 && f <= 7; r++, f++)//south east 
+	{
+		attacks |= (1ULL << (r * 8 + f));
+		if ((1ULL << (r * 8 + f)) & block) break;
+	} 
+	for (r = tr - 1, f = tf + 1; r >= 0 && f <= 7; r--, f++)//north east
+	{
+		attacks |= (1ULL << (r * 8 + f));
+		if ((1ULL << (r * 8 + f)) & block) break;
+	}
+	for (r = tr - 1, f = tf - 1; r >= 0 && f >= 0; r--, f--)//north west
+	{
+		attacks |= (1ULL << (r * 8 + f));
+		if ((1ULL << (r * 8 + f)) & block) break;
+	}
+	for (r = tr + 1, f = tf - 1; r <= 7 && f >= 0; r++, f--)//south west
+	{
+		attacks |= (1ULL << (r * 8 + f));
+		if ((1ULL << (r * 8 + f)) & block) break;
+	}
+
+	//return attack bitboard
+
+	return attacks;
+}
+//generate rook attacks irl
+U64 rook_attacks_irl(int square, U64 block)
+{
+	//initialize attacks bitboard
+	U64 attacks = 0ULL;
+	//initialize ranks and files
+	int r, f;
+	//initialize target ranks and files
+	int tr = square / 8;
+	int tf = square % 8;
+	//generate bishop attacks
+	for (r = tr + 1; r <= 7 ; r++)//south 
+	{
+		attacks |= (1ULL << (r * 8 + tf));
+		if ((1ULL << (r * 8 + tf)) & block) break;
+	}
+	for (r = tr - 1; r >= 0; r--)//north
+	{
+		attacks |= (1ULL << (r * 8 + tf));
+		if ((1ULL << (r * 8 + tf)) & block) break;
+	}
+	for (f = tf + 1; f <= 7; f++)//east
+	{
+		attacks |= (1ULL << (tr * 8 + f));
+		if ((1ULL << (tr * 8 + f)) & block) break;
+	}
+	for (f = tf - 1;f >= 0; f--)//west
+	{
+		attacks |= (1ULL << (tr * 8 + f));
+		if ((1ULL << (tr * 8 + f)) & block) break;
+	}
+
 	//return attack bitboard
 
 	return attacks;
@@ -215,6 +313,8 @@ void init_attacks()
 		king_attacks[square] = mask_king_attacks(square);
 		//initialize bishop attacks
 		bishop_attacks[square] = mask_bishop_attacks(square);
+		//initialize rook attacks
+		rook_attacks[square] = mask_rook_attacks(square);
 	}
 }
  
@@ -222,15 +322,17 @@ void init_attacks()
 int main()
 {
 
-	init_attacks();
-	//loop over board squares
-	for (int square = 0; square < 64; square++)
-	{
-		printf("current square: %d", square);
-		print_bitboard(bishop_attacks[square]);
-	}
+	init_attacks(); 
+	//init occupancy bitboard
+	U64 block = 0ULL;
+	set_bit(block, c4);
+	set_bit(block, d7);
+	set_bit(block, d3);
+	set_bit(block, h4);
+	print_bitboard(block);
 	
-	//print_bitboard(mask_bishop_attacks(d4));
+	
+	print_bitboard(rook_attacks_irl(d4,block));
 	
 	return 0;
 }
