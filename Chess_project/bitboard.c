@@ -1,5 +1,6 @@
 //system headers
 #include <stdio.h>
+#include <nmmintrin.h>
 
 
 
@@ -41,6 +42,10 @@ enum{white, black};
 #define get_bit(bitboard, square) (bitboard & (1ULL << square))
 #define set_bit(bitboard, square) (bitboard |= (1ULL << square))
 #define pop_bit(bitboard, square) (bitboard &= ~(1ULL << square))
+
+//count number of bits in a bitboard
+#define bit_count(bitboard) _mm_popcnt_u64(bitboard)
+
 
 
 //print board
@@ -325,14 +330,15 @@ int main()
 	init_attacks(); 
 	//init occupancy bitboard
 	U64 block = 0ULL;
-	set_bit(block, c4);
-	set_bit(block, d7);
-	set_bit(block, d3);
-	set_bit(block, h4);
+	set_bit(block, d1);
+	set_bit(block, d2);
+	set_bit(block, b4);
+	set_bit(block, a7);
+	set_bit(block, g4);
+	set_bit(block, h8);
 	print_bitboard(block);
 	
-	
-	print_bitboard(rook_attacks_irl(d4,block));
+	printf("bit count:%d\n", bit_count(block));
 	
 	return 0;
 }
