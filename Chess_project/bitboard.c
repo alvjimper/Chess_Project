@@ -125,9 +125,30 @@ const U64 not_h_file = 9187201950435737471ULL;
 const U64 not_hg_file = 4557430888798830399ULL;
 //not AB file
 const U64 not_ab_file = 18229723555195321596ULL;
+ 
+//relevant occupancy bitboards
 
+const int bishop_relevant_occupancy[64] = {
+	6,5,5,5,5,5,5,6,
+	5,5,5,5,5,5,5,5,
+	5,5,7,7,7,7,5,5,
+	5,5,7,9,9,7,5,5,
+	5,5,7,9,9,7,5,5,
+	5,5,7,7,7,7,5,5,
+	5,5,5,5,5,5,5,5,
+	6,5,5,5,5,5,5,6,
+};
 
-
+const int rook_relevant_occupancy[64] = {
+	12,11,11,11,11,11,11,12,
+	11,10,10,10,10,10,10,11,
+	11,10,10,10,10,10,10,11,
+	11,10,10,10,10,10,10,11,
+	11,10,10,10,10,10,10,11,
+	11,10,10,10,10,10,10,11,
+	11,10,10,10,10,10,10,11,
+	12,11,11,11,11,11,11,12,
+};
 
 //pawn attacks table [color][square]
 
@@ -354,29 +375,42 @@ void init_attacks()
 		rook_attacks[square] = mask_rook_attacks(square);
 	}
 }
+
+//set occupancy bitboard
+U64 set_occupancy(int index, int bit_mask, U64 attack_mask)
+{
+	//initialize occupancy bitboard
+	U64 occupancy = 0ULL;
+	//loop over bit mask
+	for (int count = 0; count < bit_mask; count++)
+	{
+		//get LS1B index of attack mask
+		int square = get_lsb_index(attack_mask);
+		//pop LS1B
+		pop_bit(attack_mask, square);
+		//check occupancy on board
+		if (index & (1 << count))
+		{
+			//set occupancy bit
+			set_bit(occupancy, square);
+		}
+	}
+	//return occupancy bitboard
+	return occupancy;
+}
  
+
+/********************/
+/*       Main       */
+/********************/
 
 int main()
 {
 
-	init_attacks(); 
-	//init occupancy bitboard
-	U64 block = 0ULL;
-	set_bit(block, d1);
-	set_bit(block, d2);
-	set_bit(block, b4);
-	
-	set_bit(block, g4);
-	
-	print_bitboard(block);
-	printf("least significant bit index: %d    coordinate:%s\n", get_lsb_index(block),square_to_coordinates[get_lsb_index(block)]);
-	U64 test = 0ULL;
-	set_bit(test,get_lsb_index(block));
-	print_bitboard(test);
-	
-
+	init_attacks();
 
 	
+
 	
 	return 0;
 }
