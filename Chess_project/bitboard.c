@@ -20,15 +20,25 @@ enum {
 	a4, b4, c4, d4, e4, f4, g4, h4,
 	a3, b3, c3, d3, e3, f3, g3, h3,
 	a2, b2, c2, d2, e2, f2, g2, h2,
-	a1, b1, c1, d1, e1, f1, g1, h1,
+	a1, b1, c1, d1, e1, f1, g1, h1, no_square
 };
+
+//define encoding of pieces. Upper case for white pieces, lower case for black pieces
+enum { P, N, B, R, Q, K, p, n, b, r, q, k };
 
 //colors
 
-enum{white, black};
+enum { white, black, both };
 
 //rook and bishop
 enum { rook, bishop };
+
+//0001----->white king side castling , 0010----->white queen side castling, 0100----->black king side castling, 1000----->black queen side castling
+//1111----->both sides can castle king side and queen side
+enum { wk = 1, wq = 2, bk = 4, bq = 8 };
+
+
+//
 
 const char* square_to_coordinates[] = {
 	"a8","b8","c8","d8","e8","f8","g8","h8",
@@ -40,6 +50,37 @@ const char* square_to_coordinates[] = {
 	"a2","b2","c2","d2","e2","f2","g2","h2",
 	"a1","b1","c1","d1","e1","f1","g1","h1",
 };
+
+//ASCII art pieces
+char ascii_pieces[12] = "PNBRQKpnbrqk";
+
+
+//convert ascii piece to encoded piece
+int ascii_to_piece[128] = {
+	['P'] = P,['N'] = N,['B'] = B,['R'] = R,['Q'] = Q,['K'] = K,
+	['p'] = p,['n'] = n,['b'] = b,['r'] = r,['q'] = q,['k'] = k
+};
+
+
+//define different piece bitboards 2x(pawn,rook,knight,bishop,queen,king)
+
+U64 bitboards[12];
+
+
+//define occupancy bitboards (white,black,both)
+
+U64 occupancy[3];
+
+//define side to move
+int side = -1;
+
+//define en passant square
+int en_passant = no_square;
+
+//define castling rights
+int castling;
+
+
 /********************/
 /*  Random numbers  */
 /********************/
@@ -71,10 +112,10 @@ U64 get_random_U64()
 	//initialize 4 random numbers
 	U64 n1, n2, n3, n4;
 	//initialize random number slicing 16 bits from MS1B side
-	n1 = (U64) (get_random_U32()) & 0xFFFF;
-	n2 = (U64) (get_random_U32()) & 0xFFFF;
-	n3 = (U64) (get_random_U32()) & 0xFFFF;
-	n4 = (U64) (get_random_U32()) & 0xFFFF;
+	n1 = (U64)(get_random_U32()) & 0xFFFF;
+	n2 = (U64)(get_random_U32()) & 0xFFFF;
+	n3 = (U64)(get_random_U32()) & 0xFFFF;
+	n4 = (U64)(get_random_U32()) & 0xFFFF;
 
 	//return random number
 	return n1 | (n2 << 16) | (n3 << 32) | (n4 << 48);
@@ -93,9 +134,9 @@ U64 generate_magic_candidate()
 
 //Macros --> set/get/pop
 
-#define get_bit(bitboard, square) (bitboard & (1ULL << square))
-#define set_bit(bitboard, square) (bitboard |= (1ULL << square))
-#define pop_bit(bitboard, square) (bitboard &= ~(1ULL << square))
+#define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
+#define set_bit(bitboard, square) ((bitboard) |= (1ULL << (square)))
+#define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
 
 //count number of bits in a bitboard
 #define bit_count(bitboard) _mm_popcnt_u64(bitboard)
@@ -120,14 +161,15 @@ U64 generate_magic_candidate()
 //#define LS1B_index(bitboard) __builtin_ctzll(bitboard) ¡¡compilador gcc
 static inline int get_lsb_index(U64 bitboard) {
 	// If bitboard is 0 return -1(illegal index)
-	if(bitboard) 
+	if (bitboard)
 	{	//_BitScanForward64(&index,bitboard) only in VSMC
-		return bit_count((bitboard & ~bitboard+1) - 1);
-	}else
-		return -1;
-	
+		return bit_count((bitboard & ~bitboard + 1) - 1);
 	}
-	
+	else
+		return -1;
+
+}
+
 
 
 
@@ -176,7 +218,7 @@ const U64 not_h_file = 9187201950435737471ULL;
 const U64 not_hg_file = 4557430888798830399ULL;
 //not AB file
 const U64 not_ab_file = 18229723555195321596ULL;
- 
+
 //relevant occupancy bitboards
 
 const int bishop_relevant_occupancy[64] = {
@@ -203,7 +245,7 @@ const int rook_relevant_occupancy[64] = {
 
 //rook magic numbers
 U64 rook_magic_numbers[64] = {
-	 0x8a80104000800020ULL,
+	0x8a80104000800020ULL,
 	0x140002000100040ULL,
 	0x2801880a0017001ULL,
 	0x100081001000420ULL,
@@ -373,13 +415,13 @@ U64 mask_pawn_attacks(int color, int square)
 	U64 bitboard = 0ULL;
 	//set bitboard pieces
 	set_bit(bitboard, square);
-	
+
 	//white pawn
 	if (color == white)
 	{
 		//generate pawn attacks
-		if((bitboard >> 7)& not_a_file) attacks |= (bitboard >> 7);
-		if((bitboard >> 9) & not_h_file) attacks |= (bitboard >> 9);
+		if ((bitboard >> 7) & not_a_file) attacks |= (bitboard >> 7);
+		if ((bitboard >> 9) & not_h_file) attacks |= (bitboard >> 9);
 
 	}
 	//black pawn
@@ -401,14 +443,14 @@ U64 mask_knight_attacks(int square)
 	//set bitboard pieces
 	set_bit(bitboard, square);
 	//generate knight attacks
-	if((bitboard >> 17) & not_h_file) attacks |= (bitboard >> 17);
+	if ((bitboard >> 17) & not_h_file) attacks |= (bitboard >> 17);
 	if ((bitboard >> 15) & not_a_file) attacks |= (bitboard >> 15);
 	if ((bitboard >> 10) & not_hg_file) attacks |= (bitboard >> 10);
 	if ((bitboard >> 6) & not_ab_file) attacks |= (bitboard >> 6);
 	if ((bitboard << 17) & not_a_file) attacks |= (bitboard << 17);
 	if ((bitboard << 15) & not_h_file) attacks |= (bitboard << 15);
 	if ((bitboard << 10) & not_ab_file) attacks |= (bitboard << 10);
-	if((bitboard << 6) & not_hg_file) attacks |= (bitboard << 6);
+	if ((bitboard << 6) & not_hg_file) attacks |= (bitboard << 6);
 
 	return attacks;
 }
@@ -423,8 +465,8 @@ U64 mask_king_attacks(int square)
 	//set bitboard pieces
 	set_bit(bitboard, square);
 	//generate knight attacks
-	if(bitboard >> 8) attacks |= (bitboard >> 8);
-	if(bitboard << 8) attacks |= (bitboard << 8);
+	if (bitboard >> 8) attacks |= (bitboard >> 8);
+	if (bitboard << 8) attacks |= (bitboard << 8);
 	if ((bitboard >> 9) & not_h_file) attacks |= (bitboard >> 9);
 	if ((bitboard << 9) & not_a_file) attacks |= (bitboard << 9);
 	if ((bitboard >> 7) & not_a_file) attacks |= (bitboard >> 7);
@@ -449,7 +491,7 @@ U64 mask_bishop_attacks(int square)
 	for (r = tr - 1, f = tf + 1; r >= 1 && f <= 6; r--, f++) attacks |= (1ULL << (r * 8 + f)); //north east
 	for (r = tr - 1, f = tf - 1; r >= 1 && f >= 1; r--, f--) attacks |= (1ULL << (r * 8 + f)); //north west
 	for (r = tr + 1, f = tf - 1; r <= 6 && f >= 1; r++, f--) attacks |= (1ULL << (r * 8 + f)); //south west
-	
+
 	//return attack bitboard
 
 	return attacks;
@@ -465,9 +507,9 @@ U64 mask_rook_attacks(int square)
 	int tr = square / 8;
 	int tf = square % 8;
 	//mask relevant rook occupancy 
-	for (r = tr + 1; r <= 6 ; r++) attacks |= (1ULL << (r * 8 + tf )); //south 
+	for (r = tr + 1; r <= 6; r++) attacks |= (1ULL << (r * 8 + tf)); //south 
 	for (r = tr - 1; r >= 1; r--) attacks |= (1ULL << (r * 8 + tf)); //north
-	for (f = tf + 1; f <= 6; f++) attacks |= (1ULL << (tr*8 + f)); //east
+	for (f = tf + 1; f <= 6; f++) attacks |= (1ULL << (tr * 8 + f)); //east
 	for (f = tf - 1; f >= 1; f--) attacks |= (1ULL << (tr * 8 + f)); //west
 
 	//return attack bitboard
@@ -475,7 +517,7 @@ U64 mask_rook_attacks(int square)
 	return attacks;
 }
 //generate bishop attacks irl
-U64 bishop_attacks_irl(int square,U64 block)
+U64 bishop_attacks_irl(int square, U64 block)
 {
 	//initialize attacks bitboard
 	U64 attacks = 0ULL;
@@ -489,7 +531,7 @@ U64 bishop_attacks_irl(int square,U64 block)
 	{
 		attacks |= (1ULL << (r * 8 + f));
 		if ((1ULL << (r * 8 + f)) & block) break;
-	} 
+	}
 	for (r = tr - 1, f = tf + 1; r >= 0 && f <= 7; r--, f++)//north east
 	{
 		attacks |= (1ULL << (r * 8 + f));
@@ -521,7 +563,7 @@ U64 rook_attacks_irl(int square, U64 block)
 	int tr = square / 8;
 	int tf = square % 8;
 	//generate bishop attacks
-	for (r = tr + 1; r <= 7 ; r++)//south 
+	for (r = tr + 1; r <= 7; r++)//south 
 	{
 		attacks |= (1ULL << (r * 8 + tf));
 		if ((1ULL << (r * 8 + tf)) & block) break;
@@ -536,7 +578,7 @@ U64 rook_attacks_irl(int square, U64 block)
 		attacks |= (1ULL << (tr * 8 + f));
 		if ((1ULL << (tr * 8 + f)) & block) break;
 	}
-	for (f = tf - 1;f >= 0; f--)//west
+	for (f = tf - 1; f >= 0; f--)//west
 	{
 		attacks |= (1ULL << (tr * 8 + f));
 		if ((1ULL << (tr * 8 + f)) & block) break;
@@ -613,7 +655,7 @@ U64 find_magic_number(int square, int relevant_occupancy, int rook)
 	U64 attack_mask = rook ? mask_rook_attacks(square) : mask_bishop_attacks(square);
 
 	//initialize occupancy index
-	int occupancy_index = 1<<relevant_occupancy;
+	int occupancy_index = 1 << relevant_occupancy;
 
 	//loop over occupancy indexes
 	for (int index = 0; index < occupancy_index; index++)
@@ -656,7 +698,7 @@ U64 find_magic_number(int square, int relevant_occupancy, int rook)
 				fail = 1;
 			}
 			//check if magic number works
-			if(!fail)
+			if (!fail)
 				return magic_number;
 		}
 		//magic number failed
@@ -672,7 +714,7 @@ void init_magics()
 	//loop over board squares
 	for (int square = 0; square < 64; square++)
 	{
-		
+
 		//initialize rook magic numbers
 
 		rook_magic_numbers[square] = find_magic_number(square, rook_relevant_occupancy[square], rook);
@@ -686,7 +728,7 @@ void init_magics()
 		//initialize bishop magic numbers
 		bishop_magic_numbers[square] = find_magic_number(square, bishop_relevant_occupancy[square], bishop);
 	}
-	
+
 }
 //initialice pieces attacks table
 void init_pieces_attacks(int bishop)
@@ -736,7 +778,7 @@ void init_pieces_attacks(int bishop)
 //get bishop attacks in current board occupancy
 static inline U64 get_bishop_attacks(int square, U64 occupancy)
 {
-	
+
 	occupancy &= bishop_masks[square];
 	occupancy *= bishop_magic_numbers[square];
 	occupancy >>= 64 - bishop_relevant_occupancy[square];
@@ -769,7 +811,7 @@ void init_all()
 	//initialize attacks
 	init_attacks();
 	//initialize magic numbers
-	//init_magics();
+	init_magics();
 	//initialize pieces attacks
 	init_pieces_attacks(bishop);
 	init_pieces_attacks(rook);
@@ -781,20 +823,18 @@ void init_all()
 
 int main()
 {
+	
 	//initialize all
 	init_all();
-	//print test bitboards	
 
-	U64 occupancy = 0ULL;
-	set_bit(occupancy, f2);
-	set_bit(occupancy, c5);
-	set_bit(occupancy, g7);
-	set_bit(occupancy, b2);
-	set_bit(occupancy, g5);
-	set_bit(occupancy, e2);
-	set_bit(occupancy, e7);
-	print_bitboard(occupancy);
-	//print bishop attacks
-	print_bitboard(get_rook_attacks(e5, occupancy));
+
+	set_bit(bitboards[P], f2);
+
+
+	print_bitboard(bitboards[P]);
+
+	printf("piece: %c\n", ascii_pieces[P]);
+
+	//
 	return 0;
 }
