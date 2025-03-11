@@ -27,14 +27,13 @@ enum {
 enum { P, N, B, R, Q, K, p, n, b, r, q, k };
 
 //colors
-
 enum { white, black, both };
 
 //rook and bishop
 enum { rook, bishop };
 
 //0001----->white king side castling , 0010----->white queen side castling, 0100----->black king side castling, 1000----->black queen side castling
-//1111----->both sides can castle king side and queen side
+//1111----->both colors can castle king side and queen side
 enum { wk = 1, wq = 2, bk = 4, bq = 8 };
 
 
@@ -71,8 +70,8 @@ U64 bitboards[12];
 
 U64 occupancy[3];
 
-//define side to move
-int side = -1;
+//define color to move
+int color;
 
 //define en passant square
 int en_passant = no_square;
@@ -111,7 +110,7 @@ U64 get_random_U64()
 {
 	//initialize 4 random numbers
 	U64 n1, n2, n3, n4;
-	//initialize random number slicing 16 bits from MS1B side
+	//initialize random number slicing 16 bits from MS1B color
 	n1 = (U64)(get_random_U32()) & 0xFFFF;
 	n2 = (U64)(get_random_U32()) & 0xFFFF;
 	n3 = (U64)(get_random_U32()) & 0xFFFF;
@@ -172,6 +171,9 @@ static inline int get_lsb_index(U64 bitboard) {
 
 
 
+/********************/
+/*   Input/output   */
+/********************/
 
 //print board
 
@@ -203,6 +205,54 @@ void print_bitboard(U64 bitboard)
 
 	//print bitboard as unsigned decimal number
 	printf("     Bitboard: %llud\n\n", bitboard);
+}
+
+
+//print board function
+void print_board()
+{
+	//loop over board ranks
+	for (int rank = 0; rank < 8; rank++)
+	{
+		//loop over board files
+		for (int file = 0; file < 8; file++)
+		{
+			//convert file and rank into square index
+			int square = rank * 8 + file;
+			//print ranks
+			if (!file) printf(" %d", 8 - rank);
+			
+			//initialize piece
+			int piece = -1;
+			//loop over pieces
+			for (int bbpiece = P; bbpiece <= k; bbpiece++)
+			{
+				//check if piece is on square
+				if (get_bit(bitboards[bbpiece], square))
+				{
+					//set piece
+					piece = bbpiece;
+					//break loop
+					break;
+				}
+			}
+			//print piece
+			printf(" %c", (piece==-1)?'.': ascii_pieces[piece]);
+		}
+		//print new line after each rank
+		printf("\n");
+	}
+	//print files
+	printf("\n   a b c d e f g h\n\n");
+	//print color to move
+	printf("   Color: %s\n", color == white ? "white" : "black");
+	//print en passant square
+	printf("   En passant: %s\n", en_passant == no_square ? "no square" : square_to_coordinates[en_passant]);
+	//print castling rights
+	printf("   Castling: %c%c%c%c\n\n", castling & wk ? 'K' : '-', castling & wq ? 'Q' : '-', castling & bk ? 'k' : '-', castling & bq ? 'q' : '-');
+	
+	//print new line after board
+	printf("\n");
 }
 
 
@@ -827,13 +877,44 @@ int main()
 	//initialize all
 	init_all();
 
+	//set pawn bitboards
+	bitboards[P] = 0x00FF000000000000;
+	bitboards[p] = 0x000000000000FF00;
 
-	set_bit(bitboards[P], f2);
+	//set knight bitboards
+	bitboards[N] = 0x4200000000000000;
+	bitboards[n] = 0x0000000000000042;
+	//set bishop bitboards
+	bitboards[B] = 0x2400000000000000;
+	bitboards[b] = 0x0000000000000024;
+	//set rook bitboards
+	bitboards[R] = 0x8100000000000000;
+	bitboards[r] = 0x0000000000000081;
+	//set queen bitboards
+	bitboards[Q] = 0x0800000000000000;
+	bitboards[q] = 0x0000000000000008;
+	//set king bitboards
+	bitboards[K] = 0x1000000000000000;
+	bitboards[k] = 0x0000000000000010;
 
 
-	print_bitboard(bitboards[P]);
 
-	printf("piece: %c\n", ascii_pieces[P]);
+
+
+	//initialize color to move
+	color = black;
+	//initialize en passant square
+	en_passant = e3;
+	//initialize castling rights
+	castling = wk | wq | bk | bq;
+	
+	print_board();
+	//print all bitboards
+	for (int piece = P; piece <= k; piece++) print_bitboard(bitboards[piece]);
+	
+		
+	
+
 
 	//
 	return 0;
