@@ -11,6 +11,13 @@
 
 #define U64 unsigned long long
 
+//define FEN  diferent positions
+#define empty "8/8/8/8/8/8/8/8 w - -"
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQk- e6 0 1"
+#define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
+#define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9"
+
 //enumerate board squares
 enum {
 	a8, b8, c8, d8, e8, f8, g8, h8,
@@ -232,8 +239,7 @@ void print_board()
 				{
 					//set piece
 					piece = bbpiece;
-					//break loop
-					break;
+					
 				}
 			}
 			//print piece
@@ -253,6 +259,118 @@ void print_board()
 	
 	//print new line after board
 	printf("\n");
+}
+
+//parse FEN notation
+void parse_fen(char* fen) {
+	//reset board and state variables
+	memset(bitboards, 0ULL, sizeof(bitboards));
+	memset(occupancy, 0ULL, sizeof(occupancy));
+	color = 0;
+	en_passant = no_square;
+	castling = 0;
+
+	//loop over board ranks
+	for (int rank = 0; rank < 8; rank++)
+	{
+		//loop over board files
+		for (int file = 0; file < 8; file++)
+		{
+			//convert file and rank into square index
+			int square = rank * 8 + file;
+			//match ascii pieces wiith FEN notation
+			if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z'))
+			{
+				//get piece
+				int piece = ascii_to_piece[*fen];
+				//set bitboard
+				set_bit(bitboards[piece], square);
+
+				//move to next character
+				*fen++;
+			}
+			//match digits in FEN notation
+			if (*fen >= '1' && *fen <= '8')
+			{
+				//initialize offset(convert char 0 to int 0)
+				int offset = *fen - '0';
+				//initialize piece variable
+				int piece = -1;
+				//loop over pieces
+				for (int bbpiece = P; bbpiece <= k; bbpiece++)
+				{
+					//check if piece is on current square
+					if (get_bit(bitboards[bbpiece], square))
+						//set piece
+						piece = bbpiece;
+
+					
+				}
+				//check if current square is empty
+				if (piece == -1)
+				{
+					//decrement file
+					file--;
+				}
+
+				
+				
+				//skip offset
+				file += offset;
+				//move to next character
+				*fen++;
+			}
+			//match rank separator
+			if (*fen == '/')
+			{
+				//move to next character
+				*fen++;
+			}
+		}
+		
+		
+	}
+	//move to fen color
+	*fen++;
+	//set color
+	color = (*fen == 'w') ? white : black;
+	printf("fen: '%s'\n",fen);
+	//move to castling rights
+	fen+=2;
+	//parse castling rights
+	while (*fen != ' ')
+	{
+		//parse castling rights
+		switch (*fen)
+		{
+		case 'K': castling |= wk; break;
+		case 'Q': castling |= wq; break;
+		case 'k': castling |= bk; break;
+		case 'q': castling |= bq; break;
+		case '-': break;
+		}
+		//move to next character
+		*fen++;
+	}
+	
+	//move to en passant square
+	*fen++;
+	//parse en passant square
+	if (*fen != '-')
+	{
+		//parse file and rank
+		int file = fen[0] - 'a';
+		int rank = 8 - (*(fen + 1) - '0');
+		//set en passant square
+		en_passant = rank * 8 + file;
+	}
+	else en_passant = no_square;
+	
+	//initialize white and black occupancy
+	occupancy[white] = bitboards[P] | bitboards[N] | bitboards[B] | bitboards[R] | bitboards[Q] | bitboards[K];
+	occupancy[black] = bitboards[p] | bitboards[n] | bitboards[b] | bitboards[r] | bitboards[q] | bitboards[k];
+	occupancy[both] = occupancy[white] | occupancy[black];
+
 }
 
 
@@ -877,42 +995,32 @@ int main()
 	//initialize all
 	init_all();
 
-	//set pawn bitboards
-	bitboards[P] = 0x00FF000000000000;
-	bitboards[p] = 0x000000000000FF00;
+	////set pawn bitboards
+	//bitboards[P] = 0x00FF000000000000;
+	//bitboards[p] = 0x000000000000FF00;
 
-	//set knight bitboards
-	bitboards[N] = 0x4200000000000000;
-	bitboards[n] = 0x0000000000000042;
-	//set bishop bitboards
-	bitboards[B] = 0x2400000000000000;
-	bitboards[b] = 0x0000000000000024;
-	//set rook bitboards
-	bitboards[R] = 0x8100000000000000;
-	bitboards[r] = 0x0000000000000081;
-	//set queen bitboards
-	bitboards[Q] = 0x0800000000000000;
-	bitboards[q] = 0x0000000000000008;
-	//set king bitboards
-	bitboards[K] = 0x1000000000000000;
-	bitboards[k] = 0x0000000000000010;
+	////set knight bitboards
+	//bitboards[N] = 0x4200000000000000;
+	//bitboards[n] = 0x0000000000000042;
+	////set bishop bitboards
+	//bitboards[B] = 0x2400000000000000;
+	//bitboards[b] = 0x0000000000000024;
+	////set rook bitboards
+	//bitboards[R] = 0x8100000000000000;
+	//bitboards[r] = 0x0000000000000081;
+	////set queen bitboards
+	//bitboards[Q] = 0x0800000000000000;
+	//bitboards[q] = 0x0000000000000008;
+	////set king bitboards
+	//bitboards[K] = 0x1000000000000000;
+	//bitboards[k] = 0x0000000000000010;
 
-
-
-
-
-	//initialize color to move
-	color = black;
-	//initialize en passant square
-	en_passant = e3;
-	//initialize castling rights
-	castling = wk | wq | bk | bq;
-	
+	//parse FEN notation
+	parse_fen(tricky_position);
 	print_board();
-	//print all bitboards
-	for (int piece = P; piece <= k; piece++) print_bitboard(bitboards[piece]);
+	parse_fen(start_position);
+	print_board();
 	
-		
 	
 
 
