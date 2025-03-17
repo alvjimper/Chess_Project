@@ -39,8 +39,8 @@ enum { white, black, both };
 //rook and bishop
 enum { rook, bishop };
 
-//0001----->white king side castling , 0010----->white queen side castling, 0100----->black king side castling, 1000----->black queen side castling
-//1111----->both colors can castle king side and queen side
+//0001----->white king color castling , 0010----->white queen color castling, 0100----->black king color castling, 1000----->black queen color castling
+//1111----->both colors can castle king color and queen color
 enum { wk = 1, wq = 2, bk = 4, bq = 8 };
 
 
@@ -809,8 +809,8 @@ U64 set_occupancy(int index, int bit_mask, U64 attack_mask)
 //find the real magic number                          use bishop or rook indifferently
 U64 find_magic_number(int square, int relevant_bits, int bishop)
 {
-	// init occupancies
-	U64 occupancies[4096];
+	// init occupancy
+	U64 occupancy[4096];
 
 	// init attack tables
 	U64 attacks[4096];
@@ -827,12 +827,12 @@ U64 find_magic_number(int square, int relevant_bits, int bishop)
 	// loop over occupancy indicies
 	for (int index = 0; index < occupancy_indicies; index++)
 	{
-		// init occupancies
-		occupancies[index] = set_occupancy(index, relevant_bits, attack_mask);
+		// init occupancy
+		occupancy[index] = set_occupancy(index, relevant_bits, attack_mask);
 
 		// init attacks
-		attacks[index] = bishop ?bishop_attacks_irl(square, occupancies[index]) :
-			rook_attacks_irl(square, occupancies[index]);
+		attacks[index] = bishop ?bishop_attacks_irl(square, occupancy[index]) :
+			rook_attacks_irl(square, occupancy[index]);
 	}
 
 	// test magic numbers loop
@@ -854,7 +854,7 @@ U64 find_magic_number(int square, int relevant_bits, int bishop)
 		for (index = 0, fail = 0; !fail && index < occupancy_indicies; index++)
 		{
 			// init magic index
-			int magic_index = (int)((occupancies[index] * magic_number) >> (64 - relevant_bits));
+			int magic_index = (int)((occupancy[index] * magic_number) >> (64 - relevant_bits));
 
 			// if magic index works
 			if (used_attacks[magic_index] == 0ULL)
@@ -903,7 +903,6 @@ void init_magics()
 void init_pieces_attacks(int bishop)
 {
 	//loop over board squares
-	for (int square = 0; square < 64; square++)
 	for (int square = 0; square < 64; square++)
 	{
 		//initialize bishop and rook masks
@@ -956,7 +955,7 @@ static inline U64 get_bishop_attacks(int square, U64 occupancy)
 	occupancy &= bishop_masks[square];
 	occupancy *= bishop_magic_numbers[square];
 	occupancy >>= 64 - bishop_relevant_occupancy[square];
-
+	
 	// return bishop attacks
 	return bishop_attacks[square][occupancy];
 }
@@ -995,6 +994,73 @@ void init_all()
 	init_pieces_attacks(bishop);
 	init_pieces_attacks(rook);
 }
+//is square attacked by color
+static inline int is_attacked(int square, int color)
+{
+	// attacked by white pawns
+	if ((color == white) && (pawn_attacks[black][square] & bitboards[P])) return 1;
+
+	// attacked by black pawns
+	if ((color == black) && (pawn_attacks[white][square] & bitboards[p])) return 1;
+
+	// attacked by knights
+	if (knight_attacks[square] & ((color == white) ? bitboards[N] : bitboards[n])) return 1;
+
+	// attacked by bishops
+	if (get_bishop_attacks(square, occupancy[both]) & ((color == white) ? bitboards[B] : bitboards[b])) return 1;
+
+	// attacked by rooks
+	if (get_rook_attacks(square, occupancy[both]) & ((color == white) ? bitboards[R] : bitboards[r])) return 1;
+
+	// attacked by bishops
+	if (get_queen_attacks(square, occupancy[both]) & ((color == white) ? bitboards[Q] : bitboards[q])) return 1;
+
+	// attacked by kings
+	if (king_attacks[square] & ((color == white) ? bitboards[K] : bitboards[k])) return 1;
+
+	// else return false
+	return 0;
+}
+//print attacked squares
+void print_attacked_squares(int color)
+{
+
+	// loop over board ranks
+	for (int rank = 0; rank < 8; rank++)
+	{
+		// loop over board files
+		for (int file = 0; file < 8; file++)
+		{
+			// init square
+			int square = rank * 8 + file;
+
+			// print ranks
+			if (!file)
+				printf("  %d ", 8 - rank);
+
+			// check whether current square is attacked or not
+			printf(" %d", is_attacked(square, color) ? 1 : 0);
+		}
+
+		// print new line every rank
+		printf("\n");
+	}
+
+	// print files
+	printf("\n     a b c d e f g h\n\n");
+
+
+	//loop over board squares
+	for (int square = 0; square < 64; square++)
+	{
+		//check if square is attacked
+		if (is_attacked(square, color))
+		{
+			//print attacked square
+			printf("Square: %s is attacked by %s\n", square_to_coordinates[square], color == white ? "white" : "black");
+		}
+	}
+}
 
 /********************/
 /*       Main       */
@@ -1007,17 +1073,10 @@ int main()
 	init_all();
 
 
-	//initialize occupancy bitboard
-	U64 occupancy = 0ULL;
-	//get queen attacks
-
-	set_bit(occupancy, d6);
-	set_bit(occupancy, e5);
-	set_bit(occupancy, h8);
-	set_bit(occupancy, b2);
-	set_bit(occupancy, d2);
+	parse_fen("8/8/3P4/3Q4/8/8/8/8 w - -");
+	print_board();
 	
-	print_bitboard(get_queen_attacks(d4,occupancy));
+	print_attacked_squares(white);
 	
 	
 
