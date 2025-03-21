@@ -14,7 +14,7 @@
 //define FEN  diferent positions
 #define empty "8/8/8/8/8/8/8/8 w - -"
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-#define tricky_position "r3k2r/p2p1pb1/bn2pnp1/2pPN3/Pp2P3/2N2Q1p/1PPBBPPP/R3K2R b KQk- a3 0 1"
+#define tricky_position "r3k2r/p2p1pb1/bn2pnp1/2pPN3/Pp2P3/2N2Q1p/1PPBBPPP/R3K2R b KQkq a3 0 1"
 #define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/2P1P3/RNBQKBNR w KQkq a3 0 1"
 #define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9"
 
@@ -1060,9 +1060,9 @@ static inline void generate_moves()
 {
 	//initialize source(extracted from bitboard below) and target squares(extracted from attacks below)
 	int source_square, target_square;
-	 
+
 	//initialize piece bitboard and the attacks
-	U64 bitboard,attacks;
+	U64 bitboard, attacks;
 
 	//loop over pieces
 	for (int bbpiece = P; bbpiece <= k; bbpiece++)
@@ -1084,7 +1084,7 @@ static inline void generate_moves()
 					target_square = source_square - 8;
 
 					//generate different pawn moves
-					if (!(target_square < a8 ) && !get_bit(occupancy[both], target_square))
+					if (!(target_square < a8) && !get_bit(occupancy[both], target_square))
 					{
 						//pawn promotion
 						if (source_square >= a7 && source_square <= h7)
@@ -1107,10 +1107,10 @@ static inline void generate_moves()
 								printf("Pawn double push: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[target_square - 8]);
 							}
 						}
-						
+
 					}
 					//initialize pawn attacks
-					attacks = pawn_attacks[color][source_square] & occupancy[black] ;
+					attacks = pawn_attacks[color][source_square] & occupancy[black];
 
 					//generate pawn captures
 					while (attacks)
@@ -1151,6 +1151,39 @@ static inline void generate_moves()
 					pop_bit(bitboard, source_square);
 				}
 			}
+			//castling moves
+			if (bbpiece == K)
+			{
+				//king side castling
+				if (castling & wk)
+				{
+					//check if squares between are empoty and not attacked
+					if (!get_bit(occupancy[both], f1) && !get_bit(occupancy[both], g1))
+					{	//check if squares are not attacked
+						if (!is_attacked(e1, black) && !is_attacked(f1, black))
+						{
+							printf("King side castling:e1g1 \n");
+						}
+					}
+				}
+
+
+
+
+				//queen side castling
+				if (castling & wq)
+				{
+					//check if squares between are empoty and not attacked
+					if (!get_bit(occupancy[both], d1) && !get_bit(occupancy[both], c1) && !get_bit(occupancy[both], b1))
+					{
+						if (!is_attacked(e1, black) && !is_attacked(d1, black))
+						{
+							printf("Queen side castling:e1c1 \n");
+						}
+					}
+				}
+			}
+
 		}
 		//generate black pawn  and black knight castling moves
 		else
@@ -1191,55 +1224,87 @@ static inline void generate_moves()
 							}
 						}
 					}
-						//initialize pawn attacks
-						attacks = pawn_attacks[color][source_square] & occupancy[white];
+					//initialize pawn attacks
+					attacks = pawn_attacks[color][source_square] & occupancy[white];
 
-						//generate pawn captures
-						while (attacks)
+					//generate pawn captures
+					while (attacks)
+					{
+						target_square = get_lsb_index(attacks);
+						if (source_square >= a2 && source_square <= h2)
 						{
-							target_square = get_lsb_index(attacks);
-							if (source_square >= a2 && source_square <= h2)
-							{
-								//generate pawn promotion moves
-								printf("Pawn capture promotion: %s%sq\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
-								printf("Pawn capture promotion: %s%sr\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
-								printf("Pawn capture promotion : % s % sb\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
-								printf("Pawn capture promotion: %s%sn\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
-							}
-							else //normal capture
-							{
-								printf("Pawn capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
-							}
-
-
-							//pop lsb from attacks
-							pop_bit(attacks, target_square);
+							//generate pawn promotion moves
+							printf("Pawn capture promotion: %s%sq\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							printf("Pawn capture promotion: %s%sr\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							printf("Pawn capture promotion : % s % sb\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							printf("Pawn capture promotion: %s%sn\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
 						}
+						else //normal capture
+						{
+							printf("Pawn capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+						}
+
+
+						//pop lsb from attacks
+						pop_bit(attacks, target_square);
+					}
+					//generate en passant captures
+					if (en_passant != no_square)
+					{
+						//initialize en passant attacks
+						attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
 						//generate en passant captures
-						if (en_passant != no_square)
+						if (attacks)
 						{
-							//initialize en passant attacks
-							attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
-							//generate en passant captures
-							if (attacks)
-							{
-								int en_passant_target_square = get_lsb_index(attacks);
-								printf("En passant capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[en_passant_target_square]);
-							}
+							int en_passant_target_square = get_lsb_index(attacks);
+							printf("En passant capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[en_passant_target_square]);
 						}
+					}
 
 
 
-						//pop lsb from bitboard copy
-						pop_bit(bitboard, source_square);
-					
+					//pop lsb from bitboard copy
+					pop_bit(bitboard, source_square);
+
 				}
-				
-				
+
+
+			}
+			//castling moves
+			if (bbpiece == k)
+			{
+				//king side castling
+				if (castling & bk)
+				{
+					//check if squares between are empoty and not attacked
+					if (!get_bit(occupancy[both], f8) && !get_bit(occupancy[both], g8))
+					{	//check if squares are not attacked
+						if (!is_attacked(e8, white) && !is_attacked(f8, white))
+						{
+							printf("King side castling:e8g8 \n");
+						}
+					}
+				}
+
+
+
+
+				//queen side castling
+				if (castling & bq)
+				{
+					//check if squares between are empoty and not attacked
+					if (!get_bit(occupancy[both], d8) && !get_bit(occupancy[both], c8) && !get_bit(occupancy[both], b8))
+					{
+						if (!is_attacked(e8, white) && !is_attacked(d8, white))
+						{
+							printf("Queen side castling:e8c8 \n");
+						}
+					}
+				}
 			}
 		}
 		//generate knight moves
-		
+
 		//generate bishop moves
 
 		//generate rook moves
