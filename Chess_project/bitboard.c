@@ -14,8 +14,8 @@
 //define FEN  diferent positions
 #define empty "8/8/8/8/8/8/8/8 w - -"
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQk- e6 0 1"
-#define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
+#define tricky_position "r3k2r/p2p1pb1/bn2pnp1/2pPN3/Pp2P3/2N2Q1p/1PPBBPPP/R3K2R b KQk- a3 0 1"
+#define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/2P1P3/RNBQKBNR w KQkq a3 0 1"
 #define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9"
 
 //enumerate board squares
@@ -1109,6 +1109,42 @@ static inline void generate_moves()
 						}
 						
 					}
+					//initialize pawn attacks
+					attacks = pawn_attacks[color][source_square] & occupancy[black] ;
+
+					//generate pawn captures
+					while (attacks)
+					{
+						target_square = get_lsb_index(attacks);
+						if (source_square >= a7 && source_square <= h7)
+						{
+							//generate pawn promotion moves
+							printf("Pawn capture promotion: %s%sq\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							printf("Pawn capture promotion: %s%sr\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							printf("Pawn capture promotion : % s % sb\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							printf("Pawn capture promotion: %s%sn\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+						}
+						else //normal capture
+						{
+							printf("Pawn capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+						}
+
+
+						//pop lsb from attacks
+						pop_bit(attacks, target_square);
+					}
+					//generate en passant captures
+					if (en_passant != no_square)
+					{
+						//initialize en passant attacks
+						attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
+						//generate en passant captures
+						if (attacks)
+						{
+							int en_passant_target_square = get_lsb_index(attacks);
+							printf("En passant capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[en_passant_target_square]);
+						}
+					}
 
 
 					//pop lsb from bitboard copy
@@ -1122,7 +1158,7 @@ static inline void generate_moves()
 			//take black pawn index
 			if (bbpiece == p)
 			{
-				//loop over white pawns
+				//loop over black pawns
 				while (bitboard)
 				{
 					//get source square
@@ -1154,13 +1190,52 @@ static inline void generate_moves()
 								printf("Pawn double push: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[target_square + 8]);
 							}
 						}
-
 					}
+						//initialize pawn attacks
+						attacks = pawn_attacks[color][source_square] & occupancy[white];
+
+						//generate pawn captures
+						while (attacks)
+						{
+							target_square = get_lsb_index(attacks);
+							if (source_square >= a2 && source_square <= h2)
+							{
+								//generate pawn promotion moves
+								printf("Pawn capture promotion: %s%sq\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+								printf("Pawn capture promotion: %s%sr\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+								printf("Pawn capture promotion : % s % sb\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+								printf("Pawn capture promotion: %s%sn\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							}
+							else //normal capture
+							{
+								printf("Pawn capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+							}
 
 
-					//pop lsb from bitboard copy
-					pop_bit(bitboard, source_square);
+							//pop lsb from attacks
+							pop_bit(attacks, target_square);
+						}
+						//generate en passant captures
+						if (en_passant != no_square)
+						{
+							//initialize en passant attacks
+							attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
+							//generate en passant captures
+							if (attacks)
+							{
+								int en_passant_target_square = get_lsb_index(attacks);
+								printf("En passant capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[en_passant_target_square]);
+							}
+						}
+
+
+
+						//pop lsb from bitboard copy
+						pop_bit(bitboard, source_square);
+					
 				}
+				
+				
 			}
 		}
 		//generate knight moves
