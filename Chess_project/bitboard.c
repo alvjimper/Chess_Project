@@ -1519,6 +1519,36 @@ void init_all()
 /*       Main       */
 /********************/
 
+
+
+/*		 6 nibbles  = 1 nibble is 4 bits				 to hex= 0x
+* 
+*			binary representation							hex representation
+		0000 0000 0000 0000 0011 1111 source square			0x3f
+		0000 0000 0000 1111 1100 0000 target square			0xfc0
+		0000 0000 1111 0000 0000 0000 piece					0xf000
+		0000 1111 0000 0000 0000 0000 promotion piece		0xf0000
+		0001 0000 0000 0000 0000 0000 capture flag			0x100000
+		0010 0000 0000 0000 0000 0000 double push flag		0x200000
+		0100 0000 0000 0000 0000 0000 en passant flag		0x400000
+		1000 0000 0000 0000 0000 0000 castling flag			0x800000
+
+*/
+
+//encode move
+#define encode_move(source, target, piece, promotion, capture, double_push, en_passant, castling) ((source) | ((target) << 6) | ((piece) << 12) | ((promotion) << 16) | ((capture) << 20) | ((double_push) << 21) | ((en_passant) << 22) | ((castling) << 23))
+ 
+//decode move
+#define get_source_move(move) (move & 0x3f)
+#define get_target_move(move) ((move & 0x3fc0) >> 6)
+#define get_piece_move(move) ((move & 0xf000) >> 12)
+#define get_promotion_move(move) ((move & 0xf0000) >> 16) 
+#define get_capture_move(move) (move & 0x100000)  
+#define get_double_push_move(move) (move& 0x200000) 
+#define get_en_passant_move(move) (move & 0x400000) 
+#define get_castling_move(move) (move & 0x800000) 
+
+
 int main()
 {
 	
@@ -1528,11 +1558,22 @@ int main()
 
 	parse_fen(tricky_position);
 	print_board();
-	generate_moves();
 	
-	;
+	
+
+	int move = encode_move(d7, e8,P, K, 1, 1, 1, 1);
+	printf("source move : %s\n",square_to_coordinates[get_source_move(move)]);
+	printf("target move : %s\n", square_to_coordinates[get_target_move(move)]);
+	printf("Piece : %c\n",ascii_pieces[ get_piece_move(move)]);
+	printf("Promotion : %c\n", ascii_pieces[get_promotion_move(move)]);
+	printf("Capture : %d\n", get_capture_move(move));
+	printf("Double push : %d\n", get_double_push_move(move));
+	printf("En passant : %d\n", get_en_passant_move(move));
+	printf("Castling : %d\n", get_castling_move(move));
+	printf("square h1: %d\n", h1);
+	
 
 
-	//
+	
 	return 0;
 }
