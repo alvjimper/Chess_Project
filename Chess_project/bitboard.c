@@ -1549,6 +1549,63 @@ void init_all()
 #define get_castling_move(move) (move & 0x800000) 
 
 
+//moveslist structure
+typedef struct
+{
+	//moves
+	int move[256];
+
+	//count
+	int count;
+
+}moves;
+
+
+//initialize moves list
+static inline void init_move_list(moves* move_list,int move)
+{
+
+	//store move and increment move count
+	move_list->move[move_list->count++] = move;
+	 
+}
+
+//promotion pieces
+char promoted_pieces[] = { [Q]='q',[R]= 'r',[B]='b',[N]='n',[q] = 'q',[r] = 'r',[b] = 'b',[n] = 'n' };
+
+//print moves(for UCI)
+void print_moves(int move)
+{
+	
+		//print move
+		printf("%s%s%c\n",square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)],promoted_pieces[get_promotion_move(move)]);
+	
+}
+
+//print moves list
+void print_moves_list(moves* move_list)
+{
+	printf("\n		move  piece  capture  double_push  en_passant  castling \n\n");
+	//loop over moves
+	for (int move_count= 0; move_count < move_list->count; move_count++)
+	{
+		//get move
+		int move = move_list->move[move_count];
+		
+		//print move
+		printf("		%s%s%c  %c      %d        %d	    %d		%d \n", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)], promoted_pieces[get_promotion_move(move)]
+		
+																	,ascii_pieces[get_piece_move(move)], get_capture_move(move)? 1:0,get_double_push_move(move) ? 1 : 0,get_en_passant_move(move) ? 1 : 0,get_castling_move(move) ? 1 : 0);
+
+
+	}
+	
+
+
+	
+}
+
+
 int main()
 {
 	
@@ -1559,18 +1616,15 @@ int main()
 	parse_fen(tricky_position);
 	print_board();
 	
+	//initialize moves list and move count
+	moves move_list[1];
+	move_list->count = 0;
 	
+	//generate moves
+	init_move_list(move_list ,encode_move(d7, e8,P, Q, 1, 0, 0, 0));
 
-	int move = encode_move(d7, e8,P, K, 1, 1, 1, 1);
-	printf("source move : %s\n",square_to_coordinates[get_source_move(move)]);
-	printf("target move : %s\n", square_to_coordinates[get_target_move(move)]);
-	printf("Piece : %c\n",ascii_pieces[ get_piece_move(move)]);
-	printf("Promotion : %c\n", ascii_pieces[get_promotion_move(move)]);
-	printf("Capture : %d\n", get_capture_move(move));
-	printf("Double push : %d\n", get_double_push_move(move));
-	printf("En passant : %d\n", get_en_passant_move(move));
-	printf("Castling : %d\n", get_castling_move(move));
-	printf("square h1: %d\n", h1);
+	//print moves list
+	print_moves_list(move_list);
 	
 
 
