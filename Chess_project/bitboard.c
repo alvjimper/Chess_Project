@@ -1103,7 +1103,7 @@ void init_all()
 
 //decode move
 #define get_source_move(move) (move & 0x3f)
-#define get_target_move(move) ((move & 0x3fc0) >> 6)
+#define get_target_move(move) ((move & 0xfc0) >> 6)
 #define get_piece_move(move) ((move & 0xf000) >> 12)
 #define get_promotion_move(move) ((move & 0xf0000) >> 16) 
 #define get_capture_move(move) (move & 0x100000)  
@@ -1180,6 +1180,150 @@ void print_moves_list(moves* move_list)
 
 
 }
+
+//preserve board state
+#define copy_board()						\
+	U64 bitboard_copy[12], occupancy_copy[3];	\
+	int color_copy, en_passant_copy, castling_copy;	\
+	memcpy(bitboard_copy, bitboards, sizeof(bitboards));	\
+	memcpy(occupancy_copy, occupancy, sizeof(occupancy));	\
+	color_copy = color, en_passant_copy = en_passant, castling_copy = castling;	\
+
+
+
+//restore board state
+#define restore_board()						\
+	memcpy(bitboards, bitboard_copy, sizeof(bitboards));  \
+	memcpy(occupancy, occupancy_copy, sizeof(occupancy));  \
+	color = color_copy, en_passant = en_passant_copy, castling = castling_copy; \
+
+
+//move type
+enum 
+{
+	all_moves,only_capture
+};
+
+//doing move on board
+static inline int make_move(int move, int move_flag)
+{	//move is not capture
+	if (move_flag == all_moves)
+	{
+		//preserve board state
+		copy_board();
+		//parse move
+		int source_square = get_source_move(move);
+		int target_square = get_target_move(move);
+		int piece = get_piece_move(move);
+		int promotion = get_promotion_move(move);
+		int capture = get_capture_move(move);
+		int double_push = get_double_push_move(move);
+		int en_passant = get_en_passant_move(move);
+		int castling = get_castling_move(move);
+
+
+		//move piece
+		pop_bit(bitboards[piece], source_square);
+		set_bit(bitboards[piece], target_square);
+
+		//dealing with caspture moves
+		if (capture)
+		{
+			//get captured piece index range depending on color
+			int first_piece, last_piece;
+			//white to move
+			if (color == white)
+			{
+				first_piece = p;
+				last_piece = k;
+			}
+			//black to move
+			else
+			{
+				first_piece = P;
+				last_piece = K;
+			}
+			//loop over opponent pieces
+			for (int piece = first_piece; piece <= last_piece; piece++)
+			{
+				//check if piece is on target square
+				if (get_bit(bitboards[piece], target_square))
+				{
+					//remove captured piece
+					pop_bit(bitboards[piece], target_square);
+					break;
+				}
+			} 
+
+		}
+
+		//dealing with en promotion moves
+		if (promotion)
+		{
+			//remove pawn
+			pop_bit(bitboards[(color==white) ? P: p], target_square);
+			//add promoted piece
+			set_bit(bitboards[promotion], target_square);
+		}
+		//dealing with en_passant moves
+		if (en_passant)
+		{
+			//remove captured pawn
+			(color == white) ? pop_bit(bitboards[p], target_square + 8) : pop_bit(bitboards[P], target_square - 8);
+		}
+		//reset en passant square
+		en_passant = no_square;
+
+		//dealing with double pawn push moves
+		if (double_push)
+		{
+			(color == white) ? (en_passant = target_square + 8) : (en_passant = target_square - 8);
+		}
+		//dealing with castling moves
+		if(castling)
+		{
+			switch (target_square)
+			{
+			case (g1):
+				pop_bit(bitboards[R], h1);
+				set_bit(bitboards[R], f1);
+				break;
+			case (c1):
+				pop_bit(bitboards[R], a1);
+				set_bit(bitboards[R], d1);
+				break;
+			case (g8):
+				pop_bit(bitboards[r], h8);
+				set_bit(bitboards[r], f8);
+				break;
+			case (c8):
+				pop_bit(bitboards[r], a8);
+				set_bit(bitboards[r], d8);
+				break;
+			}
+				
+				
+		}
+	
+
+
+	}
+	//move is capture
+	else
+	{	//make sure is a capture
+		if (get_capture_move(move))
+		{
+			make_move(move, all_moves);
+		}
+		//move is not capture
+		else
+		{	//dont move
+			return 0;
+		}
+		
+	}
+}
+
 static inline void generate_moves(moves* move_list)
 {
 
@@ -1637,28 +1781,35 @@ int main()
 	init_all();
 
 
-	parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq c6 0 1 ");
+	parse_fen(tricky_position);
 	print_board();
 
-	//preserve board state
-	U64 bitboard_copy[12],occupancy_copy[3];
+	//create move list
+	moves move_list[1];
 
-	int color_copy, en_passant_copy, castling_copy;
+	//generate moves
+	generate_moves(move_list);
 
-	memcpy(bitboard_copy, bitboards, sizeof(bitboards));
-	memcpy(occupancy_copy, occupancy, sizeof(occupancy));
-	color_copy = color, en_passant_copy = en_passant, castling_copy = castling;
+	//loop over generated moves
+	for(int move_count=0;move_count<move_list->count; move_count++)
+	{
+		int move = move_list->moves[move_count];
 
+		//preserve board state
+		copy_board();
+		//make move
 
-	parse_fen(empty);
-	print_board();
+		make_move(move, all_moves);
+		print_board();
+		getchar();
 
-	//restore board state
-	memcpy(bitboards, bitboard_copy, sizeof(bitboards));
-	memcpy(occupancy, occupancy_copy, sizeof(occupancy));
-	color = color_copy, en_passant = en_passant_copy, castling = castling_copy;
+		//restore board state
+		restore_board();
+		print_board();
+		getchar();
+		
+	}
 
-	print_board();
 
 
 
