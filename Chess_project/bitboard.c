@@ -260,10 +260,9 @@ void print_board()
 	//print en passant square
 	printf("   En passant: %s\n", en_passant == no_square ? "no square" : square_to_coordinates[en_passant]);
 	//print castling rights
-	printf("   Castling: %c%c%c%c\n\n", castling & wk ? 'K' : '-', castling & wq ? 'Q' : '-', castling & bk ? 'k' : '-', castling & bq ? 'q' : '-');
+	printf("   Castling: %c%c%c%c\n\n", (castling & wk) ? 'K' : '-', (castling & wq) ? 'Q' : '-', (castling & bk) ? 'k' : '-', (castling & bq) ? 'q' : '-');
 
-	//print new line after board
-	printf("\n");
+	
 }
 
 //parse FEN notation
@@ -336,10 +335,10 @@ void parse_fen(char* fen) {
 
 	}
 	//move to fen color
-	*fen++;
+	fen++;
 	//set color
-	color = (*fen == 'w') ? white : black;
-	printf("fen: '%s'\n", fen);
+	(*fen == 'w') ? (color = white) : (color = black);
+	
 	//move to castling rights
 	fen += 2;
 	//parse castling rights
@@ -355,17 +354,17 @@ void parse_fen(char* fen) {
 		case '-': break;
 		}
 		//move to next character
-		*fen++;
+		fen++;
 	}
 
 	//move to en passant square
-	*fen++;
+	fen++;
 	//parse en passant square
 	if (*fen != '-')
 	{
 		//parse file and rank
 		int file = fen[0] - 'a';
-		int rank = 8 - (*(fen + 1) - '0');
+		int rank = 8 - (fen[1] - '0');
 		//set en passant square
 		en_passant = rank * 8 + file;
 	}
@@ -1204,6 +1203,21 @@ enum
 	all_moves,only_capture
 };
 
+//castling rights constant
+
+const int castling_rights_constant[64] = {
+	 7,15,15,15, 3,15,15,11,
+	15,15,15,15,15,15,15,15,
+	15,15,15,15,15,15,15,15,
+	15,15,15,15,15,15,15,15,
+	15,15,15,15,15,15,15,15,
+	15,15,15,15,15,15,15,15,
+	15,15,15,15,15,15,15,15,
+	13,15,15,15,12,15,15,14
+};
+
+
+
 //doing move on board
 static inline int make_move(int move, int move_flag)
 {	//move is not capture
@@ -1219,7 +1233,7 @@ static inline int make_move(int move, int move_flag)
 		int capture = get_capture_move(move);
 		int double_push = get_double_push_move(move);
 		int en_passant = get_en_passant_move(move);
-		int castling = get_castling_move(move);
+		int castle = get_castling_move(move);
 
 
 		//move piece
@@ -1280,7 +1294,7 @@ static inline int make_move(int move, int move_flag)
 			(color == white) ? (en_passant = target_square + 8) : (en_passant = target_square - 8);
 		}
 		//dealing with castling moves
-		if(castling)
+		if(castle)
 		{
 			switch (target_square)
 			{
@@ -1304,8 +1318,14 @@ static inline int make_move(int move, int move_flag)
 				
 				
 		}
-	
+		//reset castling rights
+		castling &= castling_rights_constant[source_square];
+		castling &= castling_rights_constant[target_square];
 
+		//updating occupancy
+		occupancy[white] = bitboards[P] | bitboards[N] | bitboards[B] | bitboards[R] | bitboards[Q] | bitboards[K];
+		occupancy[black] = bitboards[p] | bitboards[n] | bitboards[b] | bitboards[r] | bitboards[q] | bitboards[k];
+		occupancy[both] = occupancy[white] | occupancy[black];
 
 	}
 	//move is capture
@@ -1781,7 +1801,7 @@ int main()
 	init_all();
 
 
-	parse_fen(tricky_position);
+	parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
 	print_board();
 
 	//create move list
@@ -1800,12 +1820,14 @@ int main()
 		//make move
 
 		make_move(move, all_moves);
-		print_board();
+		print_bitboard(occupancy[black]);
+		//print_board();
 		getchar();
 
 		//restore board state
 		restore_board();
-		print_board();
+		print_bitboard(occupancy[black]);
+		//print_board();
 		getchar();
 		
 	}
