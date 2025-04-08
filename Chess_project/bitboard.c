@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <nmmintrin.h>
+#include <time.h>
+#include <windows.h>
 
 
 
@@ -14,7 +16,7 @@
 //define FEN  diferent positions
 #define empty "8/8/8/8/8/8/8/8 b - -"
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-#define tricky_position  "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
+#define tricky_position   "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
 #define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/2P1P3/RNBQKBNR w KQkq a3 0 1"
 #define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9"
 
@@ -258,7 +260,7 @@ void print_board()
 	//print color to move
 	printf("   Color: %s\n", color == white ? "white" : "black");
 	//print en passant square
-	printf("   En passant: %s\n", en_passant == no_square ? "no square" : square_to_coordinates[en_passant]);
+	printf("   En passant: %s\n", (en_passant == no_square) ? "no square" : square_to_coordinates[en_passant]);
 	//print castling rights
 	printf("   Castling: %c%c%c%c\n\n", (castling & wk) ? 'K' : '-', (castling & wq) ? 'Q' : '-', (castling & bk) ? 'k' : '-', (castling & bq) ? 'q' : '-');
 
@@ -1142,10 +1144,16 @@ void print_moves(int move)
 {
 
 	//print move
-	printf("%s%s%c\n", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)], promoted_pieces[get_promotion_move(move)]);
+	if (get_promotion_move(move))
+	{
+		printf("%s%s%c\n", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)], promoted_pieces[get_promotion_move(move)]);
+	}
+	else
+	{
+		printf("%s%s\n", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)]);
 
+	}
 }
-
 //print moves list
 void print_moves_list(moves* move_list)
 {
@@ -1232,7 +1240,7 @@ static inline int make_move(int move, int move_flag)
 		int promotion = get_promotion_move(move);
 		int capture = get_capture_move(move);
 		int double_push = get_double_push_move(move);
-		int en_passant = get_en_passant_move(move);
+		int enpassant = get_en_passant_move(move);
 		int castle = get_castling_move(move);
 
 
@@ -1280,7 +1288,7 @@ static inline int make_move(int move, int move_flag)
 			set_bit(bitboards[promotion], target_square);
 		}
 		//dealing with en_passant moves
-		if (en_passant)
+		if (enpassant)
 		{
 			//remove captured pawn
 			(color == white) ? pop_bit(bitboards[p], target_square + 8) : pop_bit(bitboards[P], target_square - 8);
@@ -1326,6 +1334,23 @@ static inline int make_move(int move, int move_flag)
 		occupancy[white] = bitboards[P] | bitboards[N] | bitboards[B] | bitboards[R] | bitboards[Q] | bitboards[K];
 		occupancy[black] = bitboards[p] | bitboards[n] | bitboards[b] | bitboards[r] | bitboards[q] | bitboards[k];
 		occupancy[both] = occupancy[white] | occupancy[black];
+
+		//change color
+		color ^= 1;
+
+		//check if king is in check
+		if (is_attacked((color == white) ? get_lsb_index(bitboards[k]) : get_lsb_index(bitboards[K]), color))
+		{
+			//illegal move, restore board state
+			restore_board();
+			//dont move
+			return 0;
+		}
+		else
+		{
+			//legal move
+			return 1;
+		}
 
 	}
 	//move is capture
@@ -1427,11 +1452,11 @@ static inline void generate_moves(moves* move_list)
 					if (en_passant != no_square)
 					{
 						//initialize en passant attacks
-						attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
+						U64 en_passant_attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
 						//generate en passant captures
-						if (attacks)
+						if (en_passant_attacks)
 						{
-							int en_passant_target_square = get_lsb_index(attacks);
+							int en_passant_target_square = get_lsb_index(en_passant_attacks);
 							add_move(move_list, encode_move(source_square, en_passant_target_square, bbpiece, 0, 1, 0, 1, 0));
 						}
 					}
@@ -1543,11 +1568,11 @@ static inline void generate_moves(moves* move_list)
 					if (en_passant != no_square)
 					{
 						//initialize en passant attacks
-						attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
+						U64 en_passant_attacks = pawn_attacks[color][source_square] & (1ULL << en_passant);
 						//generate en passant captures
-						if (attacks)
+						if (en_passant_attacks)
 						{
-							int en_passant_target_square = get_lsb_index(attacks);
+							int en_passant_target_square = get_lsb_index(en_passant_attacks);
 							add_move(move_list, encode_move(source_square,en_passant_target_square, bbpiece, 0, 1, 0, 1, 0));
 						}
 					}
@@ -1792,6 +1817,115 @@ static inline void generate_moves(moves* move_list)
 }
 
 
+/**************************/ 
+/*       Perft            */
+/**************************/
+
+
+//get time ms
+
+int get_time()
+{
+
+
+	//get time
+	return GetTickCount();
+}
+
+//tree nodes(number of different positions reached at given depth)
+long nodes;
+
+//perft driver
+
+static inline void perft_driver(int depth)
+{
+	//reccursion condition
+	if (depth == 0)
+	{
+		//increment nodes count
+		nodes++;
+		return;
+	}
+	//create move list
+	moves move_list[1];
+
+	//generate moves
+	generate_moves(move_list);
+	//loop over generated moves
+	for (int move_count = 0; move_count < move_list->count; move_count++)
+	{
+		 move_list->moves[move_count];
+
+		//preserve board state
+		copy_board();
+		//make move
+
+		if (!make_move(move_list->moves[move_count] , all_moves))
+		{	//skip to next move
+			continue;
+		}
+		//call recursive function
+		perft_driver(depth - 1);
+
+
+		//restore board state
+		restore_board();
+		
+
+
+	}
+}
+
+//perft test
+void perft_test(int depth)
+{
+	printf("\n\nPerft test at depth %d\n", depth);
+	//create move list
+	moves move_list[1];
+
+	//generate moves
+	generate_moves(move_list);
+	//initialize timer
+	int start_time = get_time();
+	
+
+
+	//loop over generated moves
+	for (int move_count = 0; move_count < move_list->count; move_count++)
+	{
+		move_list->moves[move_count];
+
+		//preserve board state
+		copy_board();
+		//make move
+
+		if (!make_move(move_list->moves[move_count], all_moves))
+		{	//skip to next move
+			continue;
+		}
+		//get accumulated nodes
+		long accumulated_nodes = nodes;
+
+		//call recursive function
+		perft_driver(depth - 1);
+
+		//get old nodes
+		long old_nodes = nodes-accumulated_nodes;
+
+		//restore board state
+		restore_board();
+
+		//print moves
+		printf("\n\nMove: %s%s%c  nodes:%ld\n", square_to_coordinates[get_source_move(move_list->moves[move_count])], square_to_coordinates[get_target_move(move_list->moves[move_count])],promoted_pieces[get_promotion_move(move_list->moves[move_count])], old_nodes);
+		
+	}
+
+	//print results
+	printf("\n\n Depth: %ld\n", depth);
+	printf(" Total Nodes: %ld\n", nodes);
+	printf(" Time: %d ms\n", get_time()-start_time);
+
+}
 
 
 int main()
@@ -1801,36 +1935,15 @@ int main()
 	init_all();
 
 
-	parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+	parse_fen(start_position);
 	print_board();
 
-	//create move list
-	moves move_list[1];
+	//start timer (ms)
+	int start_time = get_time();
+	//perft
+	perft_test(6);
 
-	//generate moves
-	generate_moves(move_list);
-
-	//loop over generated moves
-	for(int move_count=0;move_count<move_list->count; move_count++)
-	{
-		int move = move_list->moves[move_count];
-
-		//preserve board state
-		copy_board();
-		//make move
-
-		make_move(move, all_moves);
-		print_bitboard(occupancy[black]);
-		//print_board();
-		getchar();
-
-		//restore board state
-		restore_board();
-		print_bitboard(occupancy[black]);
-		//print_board();
-		getchar();
-		
-	}
+	
 
 
 
