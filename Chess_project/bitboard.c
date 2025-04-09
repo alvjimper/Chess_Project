@@ -1966,19 +1966,19 @@ int parse_move(char* move_string)
 			if (promotion)
 			{
 
-				if ((promotion == 'Q' || promotion == 'q') && move_string[4] == 'q')
+				if ((promotion == Q || promotion == q) && move_string[4] == 'q')
 				{
 					return move;
 				}
-				else if ((promotion == 'R' || promotion == 'r') && move_string[4] == 'r')
+				else if ((promotion == R || promotion == r) && move_string[4] == 'r')
 				{
 					return move;
 				}
-				else if ((promotion == 'B' || promotion == 'b') && move_string[4] == 'b')
+				else if ((promotion == B || promotion == b) && move_string[4] == 'b')
 				{
 					return move;
 				}
-				else if ((promotion == 'N' || promotion == 'n') && move_string[4] == 'n')
+				else if ((promotion == N || promotion == n) && move_string[4] == 'n')
 				{
 					return move;
 				}
