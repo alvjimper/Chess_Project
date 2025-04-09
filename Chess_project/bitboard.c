@@ -1927,6 +1927,76 @@ void perft_test(int depth)
 
 }
 
+/*****************************/
+/*       UCI Conection       */
+/*****************************/
+
+//parse move (USER/GUI string move input---> "a7a8n")
+int parse_move(char* move_string)
+{
+
+	//create move list
+	moves move_list[1];
+	//generate moves
+	generate_moves(move_list);
+	
+	
+
+
+	//parse move
+	int source_square = (move_string[0] - 'a') + (8-(move_string[1] - '0')) * 8;
+	int target_square = (move_string[2] - 'a') + (8-(move_string[3] - '0')) * 8;
+	
+
+	//loop over moves
+	for (int move_count = 0; move_count < move_list->count; move_count++)
+	{
+		//initialize move
+		int move = move_list->moves[move_count];
+
+
+
+		//check if move is valid
+		if (get_source_move(move) == source_square && get_target_move(move) == target_square)
+
+		{	//promote piece
+			int promotion = get_promotion_move(move);
+
+			//check if promotion
+			if (promotion)
+			{
+
+				if ((promotion == 'Q' || promotion == 'q') && move_string[4] == 'q')
+				{
+					return move;
+				}
+				else if ((promotion == 'R' || promotion == 'r') && move_string[4] == 'r')
+				{
+					return move;
+				}
+				else if ((promotion == 'B' || promotion == 'b') && move_string[4] == 'b')
+				{
+					return move;
+				}
+				else if ((promotion == 'N' || promotion == 'n') && move_string[4] == 'n')
+				{
+					return move;
+				}
+
+				//continue the next move on wrong promotions
+				continue;
+				
+			}
+			return move;
+		}
+
+	}
+	return 0;
+}
+
+
+
+
 
 int main()
 {
@@ -1935,16 +2005,18 @@ int main()
 	init_all();
 
 
-	parse_fen(start_position);
+	parse_fen(tricky_position);
 	print_board();
 
-	//start timer (ms)
-	int start_time = get_time();
-	//perft
-	perft_test(6);
-
+	int move = parse_move("a1b1");
 	
-
+	if (move)
+	{
+		make_move(move, all_moves);
+		print_board();
+	}
+	else
+		printf("\n\nInvalid move!\n");
 
 
 
