@@ -1987,11 +1987,89 @@ int parse_move(char* move_string)
 				continue;
 				
 			}
+			//legal move
 			return move;
 		}
 
 	}
+	//illegal move
 	return 0;
+}
+
+
+//parse UCI position
+void parse_position(char* command)
+{
+	//shif pointer to next token
+	command += 9;
+
+	//initialize pointer to current character
+	char* current_char = command;
+
+	//parse UCI startpos
+	if (strncmp(command, "startpos", 8) == 0)
+	{
+		//initialize start position
+		parse_fen(start_position);
+	}
+	//parse UCI fen
+	else
+	{
+		//check that fen command is available
+		current_char = strstr(command, "fen");
+		//if no fen command
+		if (!current_char)
+		{
+			parse_fen(start_position);
+		}
+		
+		//found fen
+		else
+		{
+			//skip to next token
+			current_char += 4;
+			//parse fen string and init chess board with it
+			parse_fen(current_char);
+			
+		}
+		
+	}
+	//parse UCI moves after fen position
+	current_char = strstr(command, "moves");
+
+	//moves command
+	if (current_char)
+	{
+		//skip to next token
+		current_char += 6;
+		//loop over moves
+		while (*current_char)
+		{
+			//parse move
+			int move = parse_move(current_char);
+			//check if move is valid
+			if (move)
+			{
+				make_move(move, all_moves);
+				
+			}
+			else
+			{
+				printf("Illegal move: %s\n", current_char);
+				break;
+			}
+			//move pointer to end of current move
+			while (*current_char && *current_char != ' ')
+			{
+				current_char++;
+			}
+			//go to next move(skip space)
+			current_char++;
+
+		}
+		printf("%s\n", current_char);
+	}
+
 }
 
 
@@ -2005,18 +2083,11 @@ int main()
 	init_all();
 
 
-	parse_fen(tricky_position);
+
+	//parse position
+	parse_position("position startpos moves e2e4 e7e5 g1f3 fgds");
 	print_board();
 
-	int move = parse_move("a1b1");
-	
-	if (move)
-	{
-		make_move(move, all_moves);
-		print_board();
-	}
-	else
-		printf("\n\nInvalid move!\n");
 
 
 
