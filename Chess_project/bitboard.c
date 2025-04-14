@@ -1926,12 +1926,25 @@ void perft_test(int depth)
 	printf(" Time: %d ms\n", get_time()-start_time);
 
 }
+/*****************************/
+/*       Search Engine       */
+/*****************************/
+
+//search position for best move
+void search_position(int depth)
+{
+	printf("bestmove d2d4\n");
+}
+
+
+
+
 
 /*****************************/
 /*       UCI Conection       */
 /*****************************/
 
-//parse move (USER/GUI string move input---> "a7a8n")
+//parse move command (USER/GUI string move input---> "a7a8n")
 int parse_move(char* move_string)
 {
 
@@ -1997,7 +2010,7 @@ int parse_move(char* move_string)
 }
 
 
-//parse UCI position
+//parse UCI position command
 void parse_position(char* command)
 {
 	//shif pointer to next token
@@ -2034,7 +2047,7 @@ void parse_position(char* command)
 		}
 		
 	}
-	//parse UCI moves after fen position
+	//parse UCI moves command after fen position
 	current_char = strstr(command, "moves");
 
 	//moves command
@@ -2067,14 +2080,127 @@ void parse_position(char* command)
 			current_char++;
 
 		}
-		printf("%s\n", current_char);
+		
 	}
+	//print board
+	print_board();
+}
+//parse UCI go command
+void parse_go(char* command)
+{
+	//initilize depth
+	int depth = -1;
+	//initialize pointer to current depth
+	char* current_depth = NULL;
+
+	//set depth search
+	if(current_depth = strstr(command,"depth"))
+		//convert to int and set depth
+		depth = atoi(current_depth + 6);
+	//preselected depth for time control
+	else {
+		depth = 6;
+	}
+
+	
+
+	//search position
+
+	search_position(depth);
+
+
+
 
 }
 
+//GUI-> isready     /////  Engine -> readyok
+// GUI-> ucinewgame 
+//main UCI function
+void uci_loop()
+{
+
+	//initialize user/gui input buffer
+	char input_buffer[2000];
 
 
+	//reset stdin and stdout buffering
 
+	setvbuf(stdout, NULL, _IOFBF,sizeof(stdout));
+	setvbuf(stdin, NULL, _IOFBF,sizeof(stdin));
+
+	//print engine info
+	printf("id name Chess Engine\n");
+	printf("id author alvjimper\n");
+	printf("uciok\n");
+	
+
+
+	//loop until exit
+	while (1)
+	{
+		//reset user input
+		memset(input_buffer, 0, sizeof(input_buffer));
+		//empty stdout buffer
+		fflush(stdout);
+		//get user input
+
+		
+		//parse input
+		if (!fgets(input_buffer, sizeof(input_buffer), stdin))
+		{
+			//continue loop
+			continue;
+		}
+		//input is avalable
+		if(input_buffer[0]== '\n')
+		{
+			//continue loop
+			continue;
+		}
+		//parse isready command
+		if (strncmp(input_buffer, "isready", 7) == 0)
+		{
+			printf("readyok\n");
+			continue;
+		}
+		//parse position command
+		else if (strncmp(input_buffer, "position", 8) == 0)
+		{
+			parse_position(input_buffer);
+			
+		}
+		//parse ucinewgame command
+		else if (strncmp(input_buffer, "ucinewgame", 10) == 0)
+		{
+			parse_position("position startpos");
+		}
+		
+		//parse go command
+		else if (strncmp(input_buffer, "go", 2) == 0)
+		{
+			parse_go(input_buffer);
+			
+		}
+		//parse quit command
+		else if (strncmp(input_buffer, "quit", 4) == 0)
+		{
+			printf("bye\n");
+			break;
+		}
+		//parse uci command
+		else if (strncmp(input_buffer, "uci", 3) == 0)
+		{
+			//print engine info
+			printf("id name Chess Engine\n");
+			printf("id author alvjimper\n");
+			printf("uciok\n");
+			continue;
+		}
+	
+
+
+	}
+}
 
 int main()
 {
@@ -2084,11 +2210,9 @@ int main()
 
 
 
-	//parse position
-	parse_position("position startpos moves e2e4 e7e5 g1f3 fgds");
-	print_board();
-
-
+	//connect to GUI
+	uci_loop();
+	
 
 
 
