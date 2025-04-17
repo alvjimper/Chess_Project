@@ -1146,11 +1146,11 @@ void print_moves(int move)
 	//print move
 	if (get_promotion_move(move))
 	{
-		printf("%s%s%c\n", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)], promoted_pieces[get_promotion_move(move)]);
+		printf("%s%s%c", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)], promoted_pieces[get_promotion_move(move)]);
 	}
 	else
 	{
-		printf("%s%s\n", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)]);
+		printf("%s%s", square_to_coordinates[get_source_move(move)], square_to_coordinates[get_target_move(move)]);
 
 	}
 }
@@ -1329,6 +1329,10 @@ static inline int make_move(int move, int move_flag)
 		//reset castling rights
 		castling &= castling_rights_constant[source_square];
 		castling &= castling_rights_constant[target_square];
+
+		// reset occupancies
+		memset(occupancy, 0ULL, 24);
+
 
 		//updating occupancy
 		occupancy[white] = bitboards[P] | bitboards[N] | bitboards[B] | bitboards[R] | bitboards[Q] | bitboards[K];
@@ -1927,14 +1931,309 @@ void perft_test(int depth)
 
 }
 /*****************************/
+/*       Evaluation          */
+/*****************************/
+
+//material score(pieces score)
+int material_score[12] = {
+	//white P,K,B,R,Q,K
+	100,300,350,500,1000,10000,
+	//black p,k,b,r,q,k
+	-100,-300,-350,-500,-1000,-10000,
+	
+		
+};
+// pawn positional score
+const int pawn_score[64] =
+{
+	  90,  90,  90,  90,  90,  90,  90,  90,
+	30,  30,  30,  40,  40,  30,  30,  30,
+	20,  20,  20,  30,  30,  30,  20,  20,
+	10,  10,  10,  20,  20,  10,  10,  10,
+	 5,   5,  10,  20,  20,   5,   5,   5,
+	 0,   0,   0,   5,   5,   0,   0,   0,
+	 0,   0,   0, -10, -10,   0,   0,   0,
+	 0,   0,   0,   0,   0,   0,   0,   0
+};
+
+// knight positional score
+const int knight_score[64] =
+{
+	 -15,-10,-5,-5,-5,-5,-10,-15,
+	 -10,-20,  0,  0,  0,  0,-20,-10,
+	-5,  0, 10, 20, 20, 20,  0,-5,
+	-5,  5, 20, 30, 30, 20,  5,-5,
+	-5,  0, 20, 30, 30, 20,  0,-5,
+	-5,  5, 10, 20, 20, 10,  5,-5,
+	-10,-20,  0,  5,  5,  0,-20,-5,
+	-15,-10,-5,-5,-5,-5,-10,-15
+};
+
+// bishop positional score
+const int bishop_score[64] =
+{
+	 -20,-10,-10,-10,-10,-10,-10,-20,
+	-10,  0,  0,  0,  0,  0,  0,-10,
+	-10,  0,  5, 10, 10,  5,  0,-10,
+	-10,  5,  5, 20, 20,  5,  5,-10,
+	-10,  0, 10, 20, 20, 10,  0,-10,
+	-10, 10, 10, 10, 10, 10, 10,-10,
+	-10,  5,  0,  0,  0,  0,  5,-10,
+	-20,-10,-30,-10,-10,-30,-10,-20
+
+};
+
+// rook positional score
+const int rook_score[64] =
+{
+	 10,  30,  30,  30,  30, 30,30, 30,
+	 20, 50, 50, 50, 50, 50, 50, 20,
+	-5,  0,  10,  10,  10,  10,  0, -5,
+	-5,  0,  10,  20,  20,  10,  0, -5,
+	-5,  0,  10,  20,  20,  10,  0, -5,
+	-5,  0,  10,  10,  10,  10,  0, -5,
+	-5,  0,  10,  10,  0,  10,  0, -5,
+	 0,  0,  0,  20, 20,  0,  0,  0
+
+};
+
+// king positional score
+const int king_score[64] =
+{
+	 0,   0,   0,   0,   0,   0,   0,   0,
+	 0,   0,   5,   5,   5,   5,   0,   0,
+	 0,   5,   5,  10,  10,   5,   5,   0,
+	 0,   5,  10,  20,  20,  10,   5,   0,
+	 0,   5,  10,  20,  20,  10,   5,   0,
+	 0,   0,   5,  10,  10,   5,   0,   0,
+	 0,   5,   5,  -5,  -5,   0,   5,   0,
+	 0,   0,   5,   0, -15,   0,  10,   0
+};
+
+// mirror positional score tables for opposite side
+const int mirror_score[128] =
+{
+	a1, b1, c1, d1, e1, f1, g1, h1,
+	a2, b2, c2, d2, e2, f2, g2, h2,
+	a3, b3, c3, d3, e3, f3, g3, h3,
+	a4, b4, c4, d4, e4, f4, g4, h4,
+	a5, b5, c5, d5, e5, f5, g5, h5,
+	a6, b6, c6, d6, e6, f6, g6, h6,
+	a7, b7, c7, d7, e7, f7, g7, h7,
+	a8, b8, c8, d8, e8, f8, g8, h8
+};
+
+//evaluate position
+static inline int evaluate_position()
+{
+	//initialize score
+	int score = 0;
+	//initialize current piece bitboard
+	U64 bitboard;
+	//initialize piece and square
+	int piece, square;
+
+	//loop over pieces
+	for (int bbpiece = P; bbpiece <= k; bbpiece++)
+	{
+		//update piece bitboard copy
+		bitboard = bitboards[bbpiece];
+
+		//loop over pieces in bitboard
+		while (bitboard)
+		{
+			//get piece square
+			square = get_lsb_index(bitboard);
+			//get piece
+			piece = bbpiece;
+
+			//get score
+			score += material_score[piece];
+			//get positional score
+			switch (piece)
+			{
+			case P:
+				score += pawn_score[square];
+				break;
+			case p:
+				score -= pawn_score[mirror_score[square]];
+				break;
+			case N:
+				score += knight_score[square];
+				break;
+			case n:
+				score -= knight_score[mirror_score[square]];
+				break;
+			case B:
+				score += bishop_score[square];
+				break;
+			case b:
+				score -= bishop_score[mirror_score[square]];
+				break;
+			case R:
+				score += rook_score[square];
+				break;
+			case r:
+				score -= rook_score[mirror_score[square]];
+				break;
+			case K:
+				score += king_score[square];
+				break;
+			case k:
+				score -= king_score[mirror_score[square]];
+				break;
+
+			}
+
+			
+
+			//pop lsb from bitboard copy
+			pop_bit(bitboard, square);
+		}
+		
+	}
+	//return evaluation based on color
+		return (color == white) ? score : -score;
+	
+}
+
+
+
+
+/*****************************/
 /*       Search Engine       */
 /*****************************/
+
+//half move counter (1 turn is chess are 2 half moves(2 plies) 1 each color)
+int ply;
+
+//current best move
+int best_move;
+
+//negamax search with alpha beta pruning
+static inline int negamax(int alpha, int beta, int depth)
+{
+	//check if depth is 0
+	if (depth == 0)
+	{
+		//return evaluation
+		return evaluate_position();
+	}
+	//increment node count
+	nodes++;
+	//legal move count
+	int legal_moves = 0;
+	//check if king is in check
+	int in_check = is_attacked((color == white) ? get_lsb_index(bitboards[K]) : get_lsb_index(bitboards[k]), color^1);
+
+
+	//current best move
+	int current_best;
+
+	//old alpha
+	int old_alpha = alpha;
+
+	//create move list
+	moves move_list[1];
+	//generate moves
+	generate_moves(move_list);
+	//loop over moves
+	for (int count = 0; count < move_list->count;count++)
+	{
+		//preserve board state
+		copy_board();
+		//increment ply
+		ply++;
+
+		//make legal moves
+		if (make_move(move_list->moves[count], all_moves)==0)
+		{
+			//decrement ply
+			ply--;
+			//skip to next move
+			continue;
+
+		}
+		//increment legal move count
+		legal_moves++;
+
+		//call recursive function and score current move
+		int score = -negamax(-beta, -alpha, depth - 1);
+
+
+		//decrement ply
+		ply--;
+
+
+		//restore board state
+		restore_board();
+
+
+		//check if score is greater than alpha( fail-hard beta prune)
+		if (score >= beta)
+		{
+			//node(move) fails high
+			return beta;
+		}
+		//if better move
+		if (score > alpha)
+		{
+			//PV node(move)(PV=Principal Variation)
+			alpha = score;
+			//if root node
+			if (ply == 0)
+			{
+				//set current best move with best score
+				current_best = move_list->moves[count];
+			}
+
+
+		}
+	}
+	//check if no legal moves in current position
+	if (legal_moves == 0)
+	{
+		//check if king is in check
+		if (in_check)
+		{
+			//return checkmate score(+ply choose shortest path to mate)
+			return -49000 + ply ;
+		}
+		else
+		{
+			//return stalemate score
+			return 0;
+		}
+
+	}
+
+	//find better move
+	if (old_alpha != alpha)
+	{ 	//best move
+
+		best_move = current_best;
+	}
+	//node(move) fails low
+	return alpha;
+}
+
+
 
 //search position for best move
 void search_position(int depth)
 {
-	printf("bestmove d2d4\n");
+	//find best move in current position
+	int score = negamax(-50000, 50000, depth);
+
+	if (best_move) 
+	{
+		printf("bestmove ");
+		print_moves(best_move);
+		printf("\n");
+	}
 }
+
+
 
 
 
@@ -2208,10 +2507,24 @@ int main()
 	//initialize all
 	init_all();
 
+	//debug mode variable
+	int debug_mode = 1;
 
+	//if debug mode is on
+	if (debug_mode)
+	{
+		parse_fen(start_position);
+		print_board();
+		search_position(2);
 
-	//connect to GUI
-	uci_loop();
+	}
+	else
+	{
+		//connect to GUI
+		uci_loop();
+	}
+
+	
 	
 
 
