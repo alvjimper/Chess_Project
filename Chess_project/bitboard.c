@@ -1986,8 +1986,8 @@ const int bishop_score[64] =
 // rook positional score
 const int rook_score[64] =
 {
-	 10,  30,  30,  30,  30, 30,30, 30,
-	 20, 50, 50, 50, 50, 50, 50, 20,
+	 50, 50, 50, 50, 50, 50, 50, 50,
+	 50, 50, 50, 50, 50, 50, 50, 50,
 	-5,  0,  10,  10,  10,  10,  0, -5,
 	-5,  0,  10,  20,  20,  10,  0, -5,
 	-5,  0,  10,  20,  20,  10,  0, -5,
@@ -2104,11 +2104,130 @@ static inline int evaluate_position()
 /*       Search Engine       */
 /*****************************/
 
+
+// most valuable victim & less valuable attacker
+
+/*
+
+	(Victims) Pawn Knight Bishop   Rook  Queen   King
+  (Attackers)
+		Pawn   105    205    305    405    505    605
+	  Knight   104    204    304    404    504    604
+	  Bishop   103    203    303    403    503    603
+		Rook   102    202    302    402    502    602
+	   Queen   101    201    301    401    501    601
+		King   100    200    300    400    500    600
+
+*/
+
+// MVV LVA [attacker][victim]
+static int mvv_lva[12][12] = {
+	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600,
+
+	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
+};
+
+
+
+
+
+
+
+
 //half move counter (1 turn is chess are 2 half moves(2 plies) 1 each color)
 int ply;
 
 //current best move
 int best_move;
+
+
+//quescence search
+static inline int quiescence_search(int alpha, int beta)
+{
+
+	//increment node count
+	nodes++;
+	
+
+	//evaluate position
+	int eval = evaluate_position();
+
+	//check if eval is greater than alpha( fail-hard beta prune)
+	if (eval >= beta)
+	{
+		//node(move) fails high
+		return beta;
+	}
+	//if better move
+	if (eval > alpha)
+	{
+		//PV node(move)(PV=Principal Variation)
+		alpha = eval;
+	}
+	
+	
+	//create move list
+	moves move_list[1];
+	//generate moves
+	generate_moves(move_list);
+	//loop over moves
+	for (int count = 0; count < move_list->count; count++)
+	{
+		//preserve board state
+		copy_board();
+		//increment ply
+		ply++;
+
+		//make legal moves
+		if (make_move(move_list->moves[count], only_capture) == 0)
+		{
+			//decrement ply
+			ply--;
+			//skip to next move
+			continue;
+
+		}
+	
+
+		//call recursive function and score current move
+		int score = -quiescence_search(-beta, -alpha);
+
+
+		//decrement ply
+		ply--;
+
+
+		//restore board state
+		restore_board();
+
+
+		//check if score is greater than alpha( fail-hard beta prune)
+		if (score >= beta)
+		{
+			//node(move) fails high
+			return beta;
+		}
+		//if better move
+		if (score > alpha)
+		{
+			//PV node(move)(PV=Principal Variation)
+			alpha = score;
+		}
+	}
+	//node(move) fails low
+	return alpha;
+}
+
 
 //negamax search with alpha beta pruning
 static inline int negamax(int alpha, int beta, int depth)
@@ -2116,8 +2235,8 @@ static inline int negamax(int alpha, int beta, int depth)
 	//check if depth is 0
 	if (depth == 0)
 	{
-		//return evaluation
-		return evaluate_position();
+		//implement quiescence search
+		return quiescence_search(alpha, beta);
 	}
 	//increment node count
 	nodes++;
@@ -2227,6 +2346,10 @@ void search_position(int depth)
 
 	if (best_move) 
 	{
+		printf("info score cp %d depth %d nodes %ld\n", score, depth, nodes);
+
+
+
 		printf("bestmove ");
 		print_moves(best_move);
 		printf("\n");
@@ -2513,9 +2636,10 @@ int main()
 	//if debug mode is on
 	if (debug_mode)
 	{
-		parse_fen(start_position);
+		parse_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9");
 		print_board();
-		search_position(2);
+		//search_position(3);
+		printf("move score: %d\n", mvv_lva[P][k]);
 
 	}
 	else
