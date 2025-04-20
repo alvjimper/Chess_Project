@@ -21,6 +21,9 @@
   <ItemGroup>
     <ClCompile Include="bitboard.c" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="bitboard.h" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

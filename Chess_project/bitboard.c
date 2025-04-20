@@ -6,6 +6,7 @@
 #include <nmmintrin.h>
 #include <time.h>
 #include <windows.h>
+#include "bitboard.h"
 
 
 
@@ -2150,6 +2151,111 @@ int ply;
 //current best move
 int best_move;
 
+//score move
+static inline int score_move(int move)
+{
+	//capture move
+	if (get_capture_move(move))
+	{
+
+		//initialize target piece
+		int target_piece = P;
+
+		//get piece depending to color
+		int start_piece, end_piece;
+
+		// color to move
+		if (color == white) 
+		{ 
+			start_piece = p; 
+			end_piece = k;
+		}
+		else
+		{ 
+			start_piece = P;
+			end_piece = K; 
+		}
+
+		// loop over opposite bitboard to the current color to move
+		for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++)
+		{
+			// if there is a piece on the target square
+			if (get_bit(bitboards[bb_piece], get_target_move(move)))
+			{
+				// remove captures piece from bitboard
+				target_piece = bb_piece;
+				break;
+			}
+		}
+
+		// score move by MVV LVA lookup [attacker][victim]
+		return mvv_lva[get_piece_move(move)][target_piece];
+	}
+
+	// score quiet move
+	else
+	{
+
+	}
+
+	return 0;
+}
+//sort moves in decreasing order
+static inline void sort_moves(moves* move_list)
+{
+	//score moves
+	int move_scores[256] = {NULL};
+
+	//loop over moves
+	for (int count = 0; count < move_list->count; count++)
+	{
+		//score move
+		move_scores[count] = score_move(move_list->moves[count]);
+	}
+		//loop over current moves
+	for (int current_move = 0; current_move < move_list->count; current_move++)
+	{
+		//loop over next moves
+		for (int next_move = current_move + 1; next_move < move_list->count; next_move++)
+		{
+			//check if move is better
+			if (move_scores[current_move] < move_scores[next_move])
+			{
+				//swap move scores
+				int temp_score = move_scores[current_move];
+				move_scores[current_move] = move_scores[next_move];
+				move_scores[next_move] = temp_score;
+				//swap moves
+				int temp_move = move_list->moves[current_move];
+				move_list->moves[current_move] = move_list->moves[next_move];
+				move_list->moves[next_move] = temp_move;
+			}
+		}
+	
+		
+	}
+
+
+	
+}
+
+// print move scores
+void print_move_scores(moves* move_list)
+{
+	printf(" Move scores:\n\n");
+
+	// loop over moves within a move list
+	for (int count = 0; count < move_list->count; count++)
+	{
+		printf(" Move: ");
+		print_moves(move_list->moves[count]);
+		printf(" score: %d\n", score_move(move_list->moves[count]));
+	}
+}
+
+
+
+
 
 //quescence search
 static inline int quiescence_search(int alpha, int beta)
@@ -2636,11 +2742,15 @@ int main()
 	//if debug mode is on
 	if (debug_mode)
 	{
-		parse_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9");
+		parse_fen(tricky_position);
 		print_board();
+		moves move_list[1];
+		//generate moves
+		generate_moves(move_list);
+		print_move_scores(move_list);
 		//search_position(3);
-		printf("move score: %d\n", mvv_lva[P][k]);
-
+		sort_moves(move_list);
+		print_move_scores(move_list);
 	}
 	else
 	{
