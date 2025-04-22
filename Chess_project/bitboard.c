@@ -2121,7 +2121,7 @@ static inline int evaluate_position()
 
 */
 
-// MVV LVA [attacker][victim]
+// MVV LVA [attacker piece][victim piece]
 static int mvv_lva[12][12] = {
 	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
 	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
@@ -2140,6 +2140,44 @@ static int mvv_lva[12][12] = {
 
 
 
+//killers move [id][ply](not capture, is quiet move that improves score)
+int killers[2][128];
+
+//book moves [piece] [square]
+int book_moves[12][128];
+
+
+/*
+		    PV table
+------------------------------------------------------
+PV line in tricky_position : e2a6 b4c3 d2c3 e6d5 g2h3
+======================================================
+
+	 0    1    2    3    4    5
+
+0    m1   m2   m3   m4   m5   m6
+
+1    0    m2   m3   m4   m5   m6
+
+2    0    0    m3   m4   m5   m6
+
+3    0    0    0    m4   m5   m6
+
+4    0    0    0    0    m5   m6
+
+5    0    0    0    0    0    m6
+
+
+*/
+//PV move --> array of principal variation moves
+
+//PV length
+int pv_length[128];
+
+//PV table --> array of principal variation indexed by ply(distance to root)
+int pv_table[128][128];
+
+
 
 
 
@@ -2148,8 +2186,7 @@ static int mvv_lva[12][12] = {
 //half move counter (1 turn is chess are 2 half moves(2 plies) 1 each color)
 int ply;
 
-//current best move
-int best_move;
+
 
 //score move
 static inline int score_move(int move)
@@ -2189,13 +2226,26 @@ static inline int score_move(int move)
 		}
 
 		// score move by MVV LVA lookup [attacker][victim]
-		return mvv_lva[get_piece_move(move)][target_piece];
+		return mvv_lva[get_piece_move(move)][target_piece]+10000;
 	}
 
 	// score quiet move
 	else
 	{
-
+		//score first killer move
+		if (move == killers[0][ply])
+		{
+			return 9000;
+		}
+		//score second killer move
+		else if (move == killers[1][ply])
+		{
+			return 8000;
+		}
+		//score book move
+		else 
+			return book_moves[get_piece_move(move)][get_target_move(move)];
+	
 	}
 
 	return 0;
@@ -2286,6 +2336,10 @@ static inline int quiescence_search(int alpha, int beta)
 	moves move_list[1];
 	//generate moves
 	generate_moves(move_list);
+	//sort moves
+	sort_moves(move_list);
+
+
 	//loop over moves
 	for (int count = 0; count < move_list->count; count++)
 	{
@@ -2338,6 +2392,10 @@ static inline int quiescence_search(int alpha, int beta)
 //negamax search with alpha beta pruning
 static inline int negamax(int alpha, int beta, int depth)
 {
+	//initialize PV length
+	pv_length[ply] = ply;
+
+
 	//check if depth is 0
 	if (depth == 0)
 	{
@@ -2351,17 +2409,24 @@ static inline int negamax(int alpha, int beta, int depth)
 	//check if king is in check
 	int in_check = is_attacked((color == white) ? get_lsb_index(bitboards[K]) : get_lsb_index(bitboards[k]), color^1);
 
-
-	//current best move
-	int current_best;
-
-	//old alpha
-	int old_alpha = alpha;
+	//increase search depth if been in check
+	if (in_check)
+	{
+		depth++;
+	}
 
 	//create move list
 	moves move_list[1];
 	//generate moves
 	generate_moves(move_list);
+
+	//sort moves
+	sort_moves(move_list);
+	
+
+	
+
+
 	//loop over moves
 	for (int count = 0; count < move_list->count;count++)
 	{
@@ -2394,23 +2459,50 @@ static inline int negamax(int alpha, int beta, int depth)
 		restore_board();
 
 
-		//check if score is greater than alpha( fail-hard beta prune)
+		//check if score is greater than beta( fail-hard beta prune)
 		if (score >= beta)
 		{
+			//in quiet move
+			if(get_capture_move(move_list->moves[count])==0)
+			{
+				//set killer move
+				killers[1][ply] = killers[0][ply];
+				killers[0][ply] = move_list->moves[count];
+			}
+
+
+
 			//node(move) fails high
 			return beta;
 		}
 		//if better move
 		if (score > alpha)
 		{
+			//set book move
+			if (get_capture_move(move_list->moves[count]) == 0)
+			{
+				book_moves[get_piece_move(move_list->moves[count])][get_target_move(move_list->moves[count])] += depth;
+			}
+
+
+
+
 			//PV node(move)(PV=Principal Variation)
 			alpha = score;
-			//if root node
-			if (ply == 0)
+			//set PV move
+			pv_table[ply][ply] = move_list->moves[count];
+
+			//loop over next ply
+			for (int next_ply = ply + 1; next_ply < pv_length[ply+1]; next_ply++)
 			{
-				//set current best move with best score
-				current_best = move_list->moves[count];
+				//copy move from deeper ply to current ply
+				pv_table[ply][next_ply] = pv_table[ply+1][next_ply];
 			}
+
+			//adjust PV length
+			pv_length[ply] = pv_length[ply + 1];
+
+
 
 
 		}
@@ -2432,12 +2524,6 @@ static inline int negamax(int alpha, int beta, int depth)
 
 	}
 
-	//find better move
-	if (old_alpha != alpha)
-	{ 	//best move
-
-		best_move = current_best;
-	}
 	//node(move) fails low
 	return alpha;
 }
@@ -2450,16 +2536,24 @@ void search_position(int depth)
 	//find best move in current position
 	int score = negamax(-50000, 50000, depth);
 
-	if (best_move) 
+	
+	printf("info score chessProgram %d depth %d nodes %ld pv  ", score, depth, nodes);
+
+	//print principal variation
+	for (int count = 0; count < pv_length[0]; count++)
 	{
-		printf("info score cp %d depth %d nodes %ld\n", score, depth, nodes);
-
-
-
-		printf("bestmove ");
-		print_moves(best_move);
-		printf("\n");
+		//print PV moves
+		print_moves(pv_table[0][count]);
+		printf(" ");
 	}
+	printf("\n");
+
+
+
+	printf("bestmove ");
+	print_moves(pv_table[0][0]);
+	printf("\n");
+	
 }
 
 
@@ -2744,13 +2838,9 @@ int main()
 	{
 		parse_fen(tricky_position);
 		print_board();
-		moves move_list[1];
-		//generate moves
-		generate_moves(move_list);
-		print_move_scores(move_list);
-		//search_position(3);
-		sort_moves(move_list);
-		print_move_scores(move_list);
+	
+		search_position(5);
+		
 	}
 	else
 	{
