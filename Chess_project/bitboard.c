@@ -1074,7 +1074,7 @@ void init_all()
 	//initialize attacks
 	init_attacks();
 	//initialize magic numbers
-	init_magics();
+	//init_magics();
 	//initialize pieces attacks
 	init_pieces_attacks(bishop);
 	init_pieces_attacks(rook);
@@ -2138,46 +2138,29 @@ static int mvv_lva[12][12] = {
 	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
 };
 
-
+//define maximum number of plies
+#define MAX_PLY 128
 
 //killers move [id][ply](not capture, is quiet move that improves score)
-int killers[2][128];
+int killers[2][MAX_PLY];
 
 //book moves [piece] [square]
-int book_moves[12][128];
+int book_moves[12][64];
 
 
-/*
-		    PV table
-------------------------------------------------------
-PV line in tricky_position : e2a6 b4c3 d2c3 e6d5 g2h3
-======================================================
+//PV line in tricky_position : e2a6 b4c3 d2c3 e6d5 g2h3
 
-	 0    1    2    3    4    5
-
-0    m1   m2   m3   m4   m5   m6
-
-1    0    m2   m3   m4   m5   m6
-
-2    0    0    m3   m4   m5   m6
-
-3    0    0    0    m4   m5   m6
-
-4    0    0    0    0    m5   m6
-
-5    0    0    0    0    0    m6
-
-
-*/
 //PV move --> array of principal variation moves
 
-//PV length
-int pv_length[128];
+//PV length [ply]
+int pv_length[MAX_PLY];
 
-//PV table --> array of principal variation indexed by ply(distance to root)
-int pv_table[128][128];
+//PV table [ply][ply] --> array of principal variation indexed by ply(distance to root)
+int pv_table[MAX_PLY][MAX_PLY];
 
+ //next current PV(following current PV flag) and score PV move
 
+int current_pv, score_pv;
 
 
 
@@ -2186,11 +2169,59 @@ int pv_table[128][128];
 //half move counter (1 turn is chess are 2 half moves(2 plies) 1 each color)
 int ply;
 
+//enable pv score flag function
 
+static inline void enable_pv_score(moves* move_list)
+{
+	//set current pv flag to 0
+	current_pv = 0;
+	//loop over moves in move list
+	for (int count = 0; count < move_list->count; count++)
+	{
+		//check we are in PV move
+		if (pv_table[0][ply] == move_list->moves[count])
+		{
+			//set score pv flag to 1
+			score_pv = 1;
+			//set current pv flag to 1
+			current_pv = 1;
+			
+		}
+	}
+
+
+}
+
+/*  =======================
+		 Move ordering
+	=======================
+
+	1. PV move
+	2. Captures in MVV/LVA
+	3. 1st killer move
+	4. 2nd killer move
+	5. History moves
+	6. Unsorted moves
+*/
 
 //score move
 static inline int score_move(int move)
 {
+	//pv score flag is allowed
+	if (score_pv)
+	{
+		//check if move is in PV
+		if (move == pv_table[0][ply])
+		{
+			//disable pv score flag
+			score_pv = 0;
+
+			//add score to move to search first
+			return 20000;
+		}
+	}
+
+
 	//capture move
 	if (get_capture_move(move))
 	{
@@ -2388,10 +2419,16 @@ static inline int quiescence_search(int alpha, int beta)
 	return alpha;
 }
 
+//constants of LMR
+
+const int full_depth_lmr = 4;
+const int reduction_limit = 3;
 
 //negamax search with alpha beta pruning
 static inline int negamax(int alpha, int beta, int depth)
 {
+	
+
 	//initialize PV length
 	pv_length[ply] = ply;
 
@@ -2402,33 +2439,69 @@ static inline int negamax(int alpha, int beta, int depth)
 		//implement quiescence search
 		return quiescence_search(alpha, beta);
 	}
+	//check if MAX_PLY is reached (coul be an overflow without this)
+	if (ply > MAX_PLY - 1)
+	{
+		//return evaluation
+		return evaluate_position();
+	}
+
 	//increment node count
 	nodes++;
-	//legal move count
-	int legal_moves = 0;
 	//check if king is in check
-	int in_check = is_attacked((color == white) ? get_lsb_index(bitboards[K]) : get_lsb_index(bitboards[k]), color^1);
-
+	int in_check = is_attacked((color == white) ? get_lsb_index(bitboards[K]) : get_lsb_index(bitboards[k]), color ^ 1);
 	//increase search depth if been in check
 	if (in_check)
 	{
 		depth++;
+	}
+	//legal move count
+	int legal_moves = 0;
+	
+	//null move pruning
+	//if depth is greater than 3 and not in check
+	if (depth > 3 && !in_check && ply)
+	{
+		//preserve board state
+		copy_board();
+
+		//switch color and give opponent a chance to move
+		color ^= 1;
+		//reset enpassant square
+		en_passant = no_square;
+
+		//search move with reduced depth -> depth -1 - r where r is the reduction limit
+
+		//call recursive function and score current move
+		int score = -negamax(-beta, -beta + 1, depth - 1 - reduction_limit);
+
+		restore_board();
+
+		//check if score is greater than beta( fail-hard beta prune)
+		if (score >= beta)
+		{
+			//node(move) fails high
+			return beta;
+		}
 	}
 
 	//create move list
 	moves move_list[1];
 	//generate moves
 	generate_moves(move_list);
-
+	//if in pv node
+	if(current_pv)
+	{
+		enable_pv_score(move_list);
+	}
 	//sort moves
 	sort_moves(move_list);
-	
 
-	
-
+	//moves searched in move list
+	int moves_searched = 0;
 
 	//loop over moves
-	for (int count = 0; count < move_list->count;count++)
+	for (int count = 0; count < move_list->count; count++)
 	{
 		//preserve board state
 		copy_board();
@@ -2436,7 +2509,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		ply++;
 
 		//make legal moves
-		if (make_move(move_list->moves[count], all_moves)==0)
+		if (make_move(move_list->moves[count], all_moves) == 0)
 		{
 			//decrement ply
 			ply--;
@@ -2447,10 +2520,47 @@ static inline int negamax(int alpha, int beta, int depth)
 		//increment legal move count
 		legal_moves++;
 
-		//call recursive function and score current move
-		int score = -negamax(-beta, -alpha, depth - 1);
+		//initialize score variable
+		int score;
+
+		// full depth search
+		if (moves_searched == 0)
+		{
+			//normal alpha beta search
+			score = -negamax(-beta, -alpha, depth - 1);
+		}
+		//we apply late move reduction(LMR)
+		else
+		{	//condition to LMR
+			if (moves_searched >= full_depth_lmr && depth >= reduction_limit && !in_check && !get_capture_move(move_list->moves[count]) && !get_promotion_move(move_list->moves[count]))
+			{
+
+				//search with reduction
+				score = -negamax(-alpha - 1, -alpha, depth - reduction_limit);
+			}
+			else
+			{
+				//check that full depth search is done
+				score = alpha +1;
+			}
+
+			//PVS (Principal Variation Search)
+			if (score > alpha)
+			{
+				//if score in alpha-beta window the other moves out of the window are not needed
+				//adjust score(try to be as closer to alpha as it can be)
+				score = -negamax(-alpha - 1, -alpha, depth - 1);
 
 
+				//if we find a subsequient move that is better than the first PV moves
+				if ((score > alpha) && (score < beta))
+				{
+					//call negamax to search again the move that has failed(previous pv search move) with normal  alpha beta window
+					score = -negamax(-beta, -alpha, depth - 1);
+				}
+			}
+		}
+		
 		//decrement ply
 		ply--;
 
@@ -2458,6 +2568,8 @@ static inline int negamax(int alpha, int beta, int depth)
 		//restore board state
 		restore_board();
 
+		//increment moves searched counter
+		moves_searched++;
 
 		//check if score is greater than beta( fail-hard beta prune)
 		if (score >= beta)
@@ -2478,7 +2590,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		//if better move
 		if (score > alpha)
 		{
-			//set book move
+			//set book move on quiet moves
 			if (get_capture_move(move_list->moves[count]) == 0)
 			{
 				book_moves[get_piece_move(move_list->moves[count])][get_target_move(move_list->moves[count])] += depth;
@@ -2489,6 +2601,7 @@ static inline int negamax(int alpha, int beta, int depth)
 
 			//PV node(move)(PV=Principal Variation)
 			alpha = score;
+			
 			//set PV move
 			pv_table[ply][ply] = move_list->moves[count];
 
@@ -2533,20 +2646,48 @@ static inline int negamax(int alpha, int beta, int depth)
 //search position for best move
 void search_position(int depth)
 {
-	//find best move in current position
-	int score = negamax(-50000, 50000, depth);
 
+	//initialize score
+	int score = 0;
+
+	//clear nodes count
+	nodes = 0;
+	//initialize current PV flag
+	current_pv = 0;
+	//initialize score PV move
+	score_pv = 0;
+
+	//clear support data structures for search(book moves, killer moves,PV table,PV length) for improving search speed
+	memset(killers, 0, sizeof(killers));
+	memset(book_moves, 0, sizeof(book_moves));
+	memset(pv_table, 0, sizeof(pv_table));
+	memset(pv_length, 0, sizeof(pv_length)); 
 	
-	printf("info score chessProgram %d depth %d nodes %ld pv  ", score, depth, nodes);
+	//iteratively deepening search
 
-	//print principal variation
-	for (int count = 0; count < pv_length[0]; count++)
+	//loop over depth
+	for (int current_depth = 1; current_depth <= depth; current_depth++)
 	{
-		//print PV moves
-		print_moves(pv_table[0][count]);
-		printf(" ");
+		
+
+		//enable PV flag
+		current_pv = 1;
+
+		//find best move in current position
+		score = negamax(-50000, 50000, current_depth);
+
+
+		printf("info score cp %d depth %d nodes %ld PV: ", score, current_depth, nodes);
+
+		//loop over principal variation
+		for (int count = 0; count < pv_length[0]; count++)
+		{
+			//print PV moves
+			print_moves(pv_table[0][count]);
+			printf(" ");
+		}
+		printf("\n");
 	}
-	printf("\n");
 
 
 
@@ -2831,7 +2972,7 @@ int main()
 	init_all();
 
 	//debug mode variable
-	int debug_mode = 1;
+	int debug_mode = 0;
 
 	//if debug mode is on
 	if (debug_mode)
@@ -2839,7 +2980,7 @@ int main()
 		parse_fen(tricky_position);
 		print_board();
 	
-		search_position(5);
+		search_position(9);
 		
 	}
 	else
