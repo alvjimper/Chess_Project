@@ -27,7 +27,7 @@
 					[
 						0
 					],
-					"name" : "Pruebas",
+					"name" : "Chess_Project",
 					"targetIndexes" : 
 					[
 						0
@@ -38,9 +38,9 @@
 			[
 				{
 					"directoryIndex" : 0,
-					"id" : "Pruebas::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-Pruebas-Debug-9afe1a3bf524dd91c5b5.json",
-					"name" : "Pruebas",
+					"id" : "Chess_Project::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Chess_Project-Debug-74db835d1bc78835c518.json",
+					"name" : "Chess_Project",
 					"projectIndex" : 0
 				}
 			]

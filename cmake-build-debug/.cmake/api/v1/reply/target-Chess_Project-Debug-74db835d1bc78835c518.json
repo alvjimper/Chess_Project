@@ -2,10 +2,10 @@
 	"artifacts" : 
 	[
 		{
-			"path" : "Pruebas.exe"
+			"path" : "Chess_Project.exe"
 		},
 		{
-			"path" : "Pruebas.pdb"
+			"path" : "Chess_Project.pdb"
 		}
 	],
 	"backtrace" : 1,
@@ -56,7 +56,7 @@
 			]
 		}
 	],
-	"id" : "Pruebas::@6890427a1f51a3e7e1df",
+	"id" : "Chess_Project::@6890427a1f51a3e7e1df",
 	"link" : 
 	{
 		"commandFragments" : 
@@ -76,8 +76,8 @@
 		],
 		"language" : "C"
 	},
-	"name" : "Pruebas",
-	"nameOnDisk" : "Pruebas.exe",
+	"name" : "Chess_Project",
+	"nameOnDisk" : "Chess_Project.exe",
 	"paths" : 
 	{
 		"build" : ".",

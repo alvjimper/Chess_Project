@@ -89,6 +89,10 @@ int en_passant = no_square;
 //define castling rights
 int castling;
 
+//"unique" hash key
+
+U64 hash_key;
+
 
 
 
@@ -360,6 +364,110 @@ void print_bitboard(U64 bitboard)
 	printf("     Bitboard: %llud\n\n", bitboard);
 }
 
+//random piece keys [piece][square]
+U64 piece_keys[12][64];
+
+//random en_passant keys [square]
+
+U64 en_passant_keys[64];
+
+//random castling keys 1111=16
+
+U64 castling_keys[16];
+
+
+
+//random color key
+
+U64 color_key;
+
+//initialize random keys for hashing
+void init_random_keys() {
+	//random seed
+	random_state = 1804289383;
+
+
+	//loop over pieces
+	for (int piece = P; piece <= k; piece++)
+	{
+		//loop over squares
+		for (int square = 0; square < 64; square++)
+		{	//initialize random piece keys
+			piece_keys[piece][square]= get_random_U64();
+
+		}
+	}
+
+	//loop over squares
+	for (int square = 0; square < 64; square++)
+	{
+		//initialize random en passant keys
+		en_passant_keys[square] = get_random_U64();
+	}
+
+	//loop over castling keys
+	for (int castle = 0; castle < 16; castle++) {
+		//initalize random castling keys
+		castling_keys[castle] = get_random_U64();
+	}
+	//initialize random color key
+	color_key = get_random_U64();
+}
+
+//generate hash key function
+
+
+U64 generate_hash_key()
+{
+
+	//hash_key
+	U64 hash_key_var = 0ULL;
+
+	//temporal bitboard copy
+	U64 bitboard;
+	//pieces hash
+	//loop over pieces
+	for (int piece = P; piece <= k; piece++) {
+		//initialize bitboard copy
+		bitboard = bitboards[piece];
+
+		//loop over pieces in bitboard
+		while (bitboard) {
+			//get square occupied by piece
+			int square = get_lsb_index(bitboard);
+			//hash pieces
+			hash_key_var ^= piece_keys[piece][square];
+
+			//pop lsb
+			pop_bit(bitboard, square);
+		}
+
+	}
+	//en passant hash
+	//if en passant
+	if (en_passant!= no_square) {
+		//hash en passant
+
+		hash_key_var ^= en_passant_keys[en_passant];
+
+	}
+
+	//castling hash
+	//if castling
+
+	hash_key_var ^= castling_keys[castling];
+
+
+	//color hash
+	if (color == black) {
+		hash_key_var ^= color_key;
+	}
+
+	//return generated hash_key
+	return hash_key_var;
+
+}
+
 
 //print board function
 void print_board()
@@ -403,8 +511,13 @@ void print_board()
 	//print castling rights
 	printf("   Castling: %c%c%c%c\n\n", (castling & wk) ? 'K' : '-', (castling & wq) ? 'Q' : '-', (castling & bk) ? 'k' : '-', (castling & bq) ? 'q' : '-');
 
+	//print hash key
+	printf("hash key: %llx", hash_key);
+
 
 }
+
+
 
 //parse FEN notation
 void parse_fen(char* fen) {
@@ -515,6 +628,9 @@ void parse_fen(char* fen) {
 	occupancy[white] = bitboards[P] | bitboards[N] | bitboards[B] | bitboards[R] | bitboards[Q] | bitboards[K];
 	occupancy[black] = bitboards[p] | bitboards[n] | bitboards[b] | bitboards[r] | bitboards[q] | bitboards[k];
 	occupancy[both] = occupancy[white] | occupancy[black];
+
+	//initialize hash key
+	hash_key = generate_hash_key();
 
 }
 
@@ -1202,21 +1318,6 @@ void print_attacked_squares(int color)
 
 
 
-/**************************/
-/*       Initialize all   */
-/*************************/
-
-//initialize all variables
-void init_all()
-{
-	//initialize attacks
-	init_attacks();
-	//initialize magic numbers
-	//init_magics();
-	//initialize pieces attacks
-	init_pieces_attacks(bishop);
-	init_pieces_attacks(rook);
-}
 
 /********************/
 /*       Main       */
@@ -2538,7 +2639,7 @@ static inline int quiescence_search(int alpha, int beta)
 		restore_board();
 
 		//return 0 if time is up
-		if (stoptime == 1)
+		if (stopped == 1)
 		{
 			return 0;
 		}
@@ -2624,7 +2725,7 @@ static inline int negamax(int alpha, int beta, int depth)
 
 		restore_board();
 
-		if (stoptime == 1)
+		if (stopped == 1)
 		{
 			return 0;
 		}
@@ -2720,7 +2821,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		//restore board state
 		restore_board();
 		//return 0 if time is up
-		if (stoptime == 1)
+		if (stopped == 1)
 		{
 			return 0;
 		}
@@ -2833,18 +2934,20 @@ void search_position(int depth)
 	//loop over depth
 	for (int current_depth = 1; current_depth <= depth; current_depth++)
 	{
-		//if time is up
-		if (stopped == 1)
-		{
-			//stop engine and return current best move
-			break;
-		}
+
+
 
 		//enable PV flag
 		current_pv = 1;
 
 		//find best move in current position
 		score = negamax(-50000, 50000, current_depth);
+		//if time is up
+		if (stopped == 1)
+		{
+			//stop engine and return current best move
+			break;
+		}
 
 		// if score is outcolor the window, try again with a full-width aspiration window and same depth
 		if ((score <= alpha) || (score >= beta)) {
@@ -3204,6 +3307,32 @@ void uci_loop()
 	}
 }
 
+
+
+
+
+
+
+
+
+/**************************/
+/*       Initialize all   */
+/*************************/
+
+//initialize all variables
+void init_all()
+{
+	//initialize attacks
+	init_attacks();
+	//initialize magic numbers
+	//init_magics();
+	//initialize pieces attacks
+	init_pieces_attacks(bishop);
+	init_pieces_attacks(rook);
+
+	//initialize random keys
+	init_random_keys();
+}
 int main()
 {
 
@@ -3219,7 +3348,8 @@ int main()
 		parse_fen(tricky_position);
 		print_board();
 
-		search_position(9);
+
+		//search_position(9);
 
 	}
 	else
