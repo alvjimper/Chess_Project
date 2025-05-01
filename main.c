@@ -13,7 +13,7 @@
 
 #define U64 unsigned long long
 
-//define FEN  diferent positions
+//define FEN  different positions
 #define empty "8/8/8/8/8/8/8/8 b - -"
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 #define tricky_position   "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
@@ -1435,7 +1435,7 @@ void print_moves_list(moves* move_list)
 	memcpy(bitboard_copy, bitboards, sizeof(bitboards));	\
 	memcpy(occupancy_copy, occupancy, sizeof(occupancy));	\
 	color_copy = color, en_passant_copy = en_passant, castling_copy = castling;	\
-
+	U64 hash_key_copy = hash_key;													\
 
 
 //restore board state
@@ -1443,6 +1443,7 @@ void print_moves_list(moves* move_list)
 	memcpy(bitboards, bitboard_copy, sizeof(bitboards));  \
 	memcpy(occupancy, occupancy_copy, sizeof(occupancy));  \
 	color = color_copy, en_passant = en_passant_copy, castling = castling_copy; \
+	hash_key = hash_key_copy;														\
 
 
 //move type
@@ -1488,6 +1489,10 @@ static inline int make_move(int move, int move_flag)
 		pop_bit(bitboards[piece], source_square);
 		set_bit(bitboards[piece], target_square);
 
+		//hash piece(remove piece from source square and move it to target square in hash key)
+		hash_key ^= piece_keys[piece][source_square];//remove from source square
+		hash_key ^= piece_keys[piece][target_square];//move to target square
+
 		//dealing with caspture moves
 		if (capture)
 		{
@@ -1506,13 +1511,15 @@ static inline int make_move(int move, int move_flag)
 				last_piece = K;
 			}
 			//loop over opponent pieces
-			for (int piece = first_piece; piece <= last_piece; piece++)
+			for (int bb_piece = first_piece; bb_piece <= last_piece; bb_piece++)
 			{
 				//check if piece is on target square
-				if (get_bit(bitboards[piece], target_square))
+				if (get_bit(bitboards[bb_piece], target_square))
 				{
-					//remove captured piece
-					pop_bit(bitboards[piece], target_square);
+					//remove captured piece from target square
+					pop_bit(bitboards[bb_piece], target_square);
+					//remove piece from hash key
+					hash_key ^= piece_keys[bb_piece][target_square];
 					break;
 				}
 			}
@@ -1524,22 +1531,80 @@ static inline int make_move(int move, int move_flag)
 		{
 			//remove pawn
 			pop_bit(bitboards[(color==white) ? P: p], target_square);
+
+			//remove pawn
+			if (color==white) {
+				pop_bit(bitboards[P],target_square);
+				//remove pawn from hash key
+				hash_key ^= piece_keys[P][target_square];
+
+			}else {
+				//remove pawn
+				pop_bit(bitboards[p],target_square);
+				//remove pawn from hash key
+				hash_key ^= piece_keys[p][target_square];
+			}
+
+
+
 			//add promoted piece
 			set_bit(bitboards[promotion], target_square);
+
+			//add piece promotion to hash key
+			hash_key ^= piece_keys[promotion][target_square];
 		}
 		//dealing with en_passant moves
 		if (enpassant)
 		{
 			//remove captured pawn
 			(color == white) ? pop_bit(bitboards[p], target_square + 8) : pop_bit(bitboards[P], target_square - 8);
+			//white to move
+			if (color == white) {
+				//remove captured pawn
+				pop_bit(bitboards[p], target_square + 8);
+				//remove pawn from hash
+				hash_key ^= piece_keys[p][target_square+8];
+
+			}
+			//black to move
+			else {
+				//remove captured pawn
+				pop_bit(bitboards[P], target_square - 8);
+				//remove pawn from hash
+				hash_key ^= piece_keys[P][target_square-8];
+			}
 		}
+
+		//hash en passant(remove en passant square from hash key)
+		if (en_passant != no_square) {
+			hash_key ^= en_passant_keys[en_passant];
+		}
+
+
 		//reset en passant square
 		en_passant = no_square;
+
+
 
 		//dealing with double pawn push moves
 		if (double_push)
 		{
 			(color == white) ? (en_passant = target_square + 8) : (en_passant = target_square - 8);
+
+			//hash en passant square
+			//white to move
+			if (color == white) {
+				en_passant = target_square + 8;
+				//hash en passant
+				hash_key ^= en_passant_keys[en_passant];
+			}
+			//black to move
+			else {
+				en_passant = target_square - 8;
+				//hash en passant
+				hash_key ^= en_passant_keys[en_passant];
+			}
+
 		}
 		//dealing with castling moves
 		if(castle)
@@ -1549,26 +1614,49 @@ static inline int make_move(int move, int move_flag)
 			case (g1):
 				pop_bit(bitboards[R], h1);
 				set_bit(bitboards[R], f1);
+				//hash castling rook
+				hash_key ^= piece_keys[R][h1];
+				hash_key ^= piece_keys[R][f1];
+
 				break;
 			case (c1):
 				pop_bit(bitboards[R], a1);
 				set_bit(bitboards[R], d1);
+				//hash castling rook
+				hash_key ^= piece_keys[R][a1];
+				hash_key ^= piece_keys[R][d1];
+
 				break;
 			case (g8):
 				pop_bit(bitboards[r], h8);
 				set_bit(bitboards[r], f8);
+				//hash castling rook
+				hash_key ^= piece_keys[r][h8];
+				hash_key ^= piece_keys[r][f8];
 				break;
 			case (c8):
 				pop_bit(bitboards[r], a8);
 				set_bit(bitboards[r], d8);
+				//hash castling rook
+				hash_key ^= piece_keys[r][a8];
+				hash_key ^= piece_keys[r][d8];
 				break;
 			}
 
 
 		}
+		//hash castling rights(remove castling)
+		hash_key ^= castling_keys[castling];
+
+
 		//reset castling rights
 		castling &= castling_rights_constant[source_square];
 		castling &= castling_rights_constant[target_square];
+
+		//hash castling rights(reset castling)
+		hash_key ^= castling_keys[castling];
+
+
 
 		// reset occupancies
 		memset(occupancy, 0ULL, 24);
@@ -1581,6 +1669,26 @@ static inline int make_move(int move, int move_flag)
 
 		//change color
 		color ^= 1;
+
+		//hash color
+
+		hash_key ^= color_key;
+
+
+		//debug hash key incremental update
+		//build hash key for the updated position after move is made
+		/*U64 hash_debug = generate_hash_key();
+
+		//if hash key built doesnt match the incrementally updated one
+
+		if (hash_key != hash_debug) {
+			printf("\n move:");
+			print_moves(move);
+			printf("\n");
+			print_board();
+			printf("\n hash key: %llx\n",hash_debug);
+			getchar();
+		}*/
 
 		//check if king is in check
 		if (is_attacked((color == white) ? get_lsb_index(bitboards[k]) : get_lsb_index(bitboards[K]), color))
@@ -2105,6 +2213,18 @@ static inline void perft_driver(int depth)
 
 		//restore board state
 		restore_board();
+		//create hash_debug
+		/*U64 hash_debug = generate_hash_key();
+		if (hash_key != hash_debug) {
+
+			printf("\n\n Restore board");
+			printf("\n move:");
+			print_moves(move_list->moves[move_count]);
+			printf("\n");
+			print_board();
+			printf("\n hash key: %llx\n",hash_debug);
+			getchar();
+		}*/
 
 
 
@@ -3345,9 +3465,10 @@ int main()
 	//if debug mode is on
 	if (debug_mode)
 	{
-		parse_fen(tricky_position);
+		parse_fen(start_position);
 		print_board();
 
+		perft_test(6);
 
 		//search_position(9);
 
