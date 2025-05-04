@@ -512,7 +512,7 @@ void print_board()
 	printf("   Castling: %c%c%c%c\n\n", (castling & wk) ? 'K' : '-', (castling & wq) ? 'Q' : '-', (castling & bk) ? 'k' : '-', (castling & bq) ? 'q' : '-');
 
 	//print hash key
-	printf("hash key: %llx", hash_key);
+	printf("hash key: %llx\n", hash_key);
 
 
 }
@@ -2519,6 +2519,104 @@ int current_pv, score_pv;
 //half move counter (1 turn is chess are 2 half moves(2 plies) 1 each color)
 int ply;
 
+
+/************************************\
+ *
+ *      Transposition Table
+ *
+****************************************/
+
+// hash table size
+#define hash_size 0x400000
+
+//no hash constant
+
+#define no_hash 100000
+
+// transposition table flags
+#define hash_flag_exact 0
+#define hash_flag_alpha 1
+#define hash_flag_beta 2
+
+// transposition table data structure
+typedef struct {
+	U64 hash_key;   // chess position identifier
+	int depth;      // current search depth
+	int flag;       // flag that tells us the type of node (fail-low/fail-high/PV)
+	int score;      // score (alpha/beta/PV)
+} tt;               // transposition table (hash table)
+
+// define tansposition table instance
+tt transposition_table[hash_size];
+
+// empty tt (hash table)
+void clear_transposition_table()
+{
+	// loop over tt elements
+	for (int index = 0; index < hash_size; index++)
+	{
+		// reset tt elements
+		transposition_table[index].hash_key = 0;
+		transposition_table[index].depth = 0;
+		transposition_table[index].flag = 0;
+		transposition_table[index].score = 0;
+	}
+}
+
+
+//read hash of transposition table
+static inline int read_hash_tt(int alpha, int beta, int depth) {
+
+	//initialize tt pointer that store specific hash entry (current board info)
+	tt* hash_pointer=&transposition_table[hash_key % hash_size];
+
+	//check we are in the correct position
+	if (hash_pointer->hash_key == hash_key) {
+		//check correct depth
+		if (hash_pointer->depth >= depth) {
+			//check the flag
+
+			//exact PV node score
+			if (hash_pointer->flag == hash_flag_exact) {
+				//return exact PV node score
+				return hash_pointer->score;
+			}
+			//check if fails low
+			if ((hash_pointer->flag == hash_flag_alpha ) && (hash_pointer->score <= alpha)) {
+				//return alpha
+				return alpha;
+			}
+			//check in fails high
+			if ((hash_pointer->flag == hash_flag_beta) &&(hash_pointer->score >= beta)) {
+				//return beta
+				return beta;
+			}
+
+		}
+
+	}
+
+	//if no has entry
+	return no_hash;
+
+}
+
+//record hash to transposition table
+
+static inline void record_hash_to_tt(int score,int depth,int hash_flag) {
+
+	//initialize tt pointer that store specific hash entry (current board info)
+	tt* hash_pointer=&transposition_table[hash_key % hash_size];
+	// record values in tt
+	hash_pointer->hash_key=hash_key;
+	hash_pointer->score=score;
+	hash_pointer->flag=hash_flag;
+	hash_pointer->depth=depth;
+
+
+}
+
+
 //enable pv score flag function
 
 static inline void enable_pv_score(moves* move_list)
@@ -3467,10 +3565,14 @@ int main()
 	{
 		parse_fen(start_position);
 		print_board();
+		clear_transposition_table();
 
-		perft_test(6);
+		record_hash_to_tt(45,1,hash_flag_beta);
+		int score = read_hash_tt(20,30,1);
 
-		//search_position(9);
+		//print hash entry score
+		printf("score from hash entry: %d\n", score);
+
 
 	}
 	else
