@@ -2489,7 +2489,7 @@ static int mvv_lva[12][12] = {
 };
 
 //define maximum number of plies
-#define MAX_PLY 128
+#define MAX_PLY 64
 
 //killers move [id][ply](not capture, is quiet move that improves score)
 int killers[2][MAX_PLY];
@@ -2800,6 +2800,12 @@ static inline int quiescence_search(int alpha, int beta)
 	//increment node count
 	nodes++;
 
+	//if we are too deep
+	if (ply > MAX_PLY -1) {
+		//evaluate position
+		return evaluate_position();
+	}
+
 
 	//evaluate position
 	int eval = evaluate_position();
@@ -2863,17 +2869,18 @@ static inline int quiescence_search(int alpha, int beta)
 		}
 
 
-		//check if score is greater than alpha( fail-hard beta prune)
-		if (score >= beta)
-		{
-			//node(move) fails high
-			return beta;
-		}
+
 		//if better move
 		if (score > alpha)
 		{
 			//PV node(move)(PV=Principal Variation)
 			alpha = score;
+			//check if score is greater than alpha( fail-hard beta prune)
+			if (score >= beta)
+			{
+				//node(move) fails high
+				return beta;
+			}
 		}
 	}
 	//node(move) fails low
@@ -2888,6 +2895,19 @@ const int reduction_limit = 2;
 //negamax search with alpha beta pruning
 static inline int negamax(int alpha, int beta, int depth)
 {
+	//initialize score variable
+	int score;
+
+	//initialize hash flag
+
+	int hash_flag = hash_flag_alpha;
+
+	//read hash position
+	if (ply && (score = read_hash_tt(alpha, beta, depth)) != no_hash ){
+		//if the move have been already search return this score without searching it
+		return score;
+	}
+
 	//communicate every 2047 nodes
 	if (nodes % 2047==0)
 	{
@@ -2905,7 +2925,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		//implement quiescence search
 		return quiescence_search(alpha, beta);
 	}
-	//check if MAX_PLY is reached (coul be an overflow without this)
+	//check if MAX_PLY is reached (could  be an overflow without this)
 	if (ply > MAX_PLY - 1)
 	{
 		//return evaluation
@@ -2926,20 +2946,35 @@ static inline int negamax(int alpha, int beta, int depth)
 
 	//null move pruning
 	//if depth is greater than 3 and not in check
-	if (depth >= 3 && in_check==0 && ply)
+	if (depth >= 3 && in_check == 0 && ply)
 	{
 		//preserve board state
 		copy_board();
 
-		//switch color and give opponent a chance to move
-		color ^= 1;
+		//increment ply
+		ply++;
+
+		//if en passant hash it
+		if (en_passant != no_square) {
+			hash_key ^= en_passant_keys[en_passant];
+		}
+
 		//reset enpassant square
 		en_passant = no_square;
+
+		//switch color and give opponent a chance to move
+		color ^= 1;
+
+		//hash color
+		hash_key ^= color_key;
 
 		//search move with reduced depth -> depth -1 - r where r is the reduction limit
 
 		//call recursive function and score current move
-		int score = -negamax(-beta, -beta + 1, depth - 1 - reduction_limit);
+		score = -negamax(-beta, -beta + 1, depth - 1 - reduction_limit);
+
+		//decrement ply
+		ply--;
 
 		restore_board();
 
@@ -2991,8 +3026,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		//increment legal move count
 		legal_moves++;
 
-		//initialize score variable
-		int score;
+
 
 		// full depth search
 		if (moves_searched == 0)
@@ -3023,7 +3057,7 @@ static inline int negamax(int alpha, int beta, int depth)
 				score = -negamax(-alpha - 1, -alpha, depth - 1);
 
 
-				//if we find a subsequient move that is better than the first PV moves
+				//if we find a subsequent move that is better than the first PV moves
 				if ((score > alpha) && (score < beta))
 				{
 					//call negamax to search again the move that has failed(previous pv search move) with normal  alpha beta window
@@ -3047,25 +3081,12 @@ static inline int negamax(int alpha, int beta, int depth)
 		//increment moves searched counter
 		moves_searched++;
 
-		//check if score is greater than beta( fail-hard beta prune)
-		if (score >= beta)
-		{
-			//in quiet move
-			if(get_capture_move(move_list->moves[count])==0)
-			{
-				//set killer move
-				killers[1][ply] = killers[0][ply];
-				killers[0][ply] = move_list->moves[count];
-			}
 
-
-
-			//node(move) fails high
-			return beta;
-		}
 		//if better move
 		if (score > alpha)
 		{
+			//change hash flag from tt to the PV node flag(exact flag)
+			hash_flag = hash_flag_exact;
 			//set book move on quiet moves
 			if (get_capture_move(move_list->moves[count]) == 0)
 			{
@@ -3091,8 +3112,25 @@ static inline int negamax(int alpha, int beta, int depth)
 			//adjust PV length
 			pv_length[ply] = pv_length[ply + 1];
 
+			//check if score is greater than beta( fail-hard beta prune)
+			if (score >= beta)
+			{
+				//record hash position with score equal to beta
+				record_hash_to_tt(beta,depth,hash_flag_beta);
+
+				//in quiet move
+				if(get_capture_move(move_list->moves[count])==0)
+				{
+					//set killer move
+					killers[1][ply] = killers[0][ply];
+					killers[0][ply] = move_list->moves[count];
+				}
 
 
+
+				//node(move) fails high
+				return beta;
+			}
 
 		}
 	}
@@ -3112,6 +3150,9 @@ static inline int negamax(int alpha, int beta, int depth)
 		}
 
 	}
+
+	//record hash position with score equal to alpha
+	record_hash_to_tt(alpha,depth,hash_flag);
 
 	//node(move) fails low
 	return alpha;
@@ -3141,6 +3182,8 @@ void search_position(int depth)
 	memset(book_moves, 0, sizeof(book_moves));
 	memset(pv_table, 0, sizeof(pv_table));
 	memset(pv_length, 0, sizeof(pv_length));
+
+
 
 
 	//initialize alpha and beta
@@ -3178,8 +3221,7 @@ void search_position(int depth)
 		alpha = score - 50;
 		beta = score + 50;
 
-
-		printf("info score cp %d depth %d nodes %ld PV: ", score, current_depth, nodes);
+		printf("info score cp %d depth %d nodes %ld time %d pv ", score, current_depth, nodes, get_time_ms() - starttime);
 
 		//loop over principal variation
 		for (int count = 0; count < pv_length[0]; count++)
@@ -3496,6 +3538,10 @@ void uci_loop()
 		else if (strncmp(input_buffer, "ucinewgame", 10) == 0)
 		{
 			parse_position("position startpos");
+
+
+			//clear transposition table
+			clear_transposition_table();
 		}
 
 		//parse go command
@@ -3550,6 +3596,9 @@ void init_all()
 
 	//initialize random keys
 	init_random_keys();
+
+	//clear transposition table
+	clear_transposition_table();
 }
 int main()
 {
@@ -3565,13 +3614,12 @@ int main()
 	{
 		parse_fen(start_position);
 		print_board();
-		clear_transposition_table();
+		search_position(10);
 
-		record_hash_to_tt(45,1,hash_flag_beta);
-		int score = read_hash_tt(20,30,1);
 
-		//print hash entry score
-		printf("score from hash entry: %d\n", score);
+
+
+
 
 
 	}
