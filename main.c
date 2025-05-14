@@ -2393,6 +2393,152 @@ const int mirror_score[128] =
 	a8, b8, c8, d8, e8, f8, g8, h8
 };
 
+
+//define file mask for pawns
+U64 file_mask[64];
+//define rank masks for pawns
+U64 rank_mask[64];
+//define masks for isolated pawns
+U64 isolated_pawn_mask[64];
+//define rank masks for passed pawns
+U64 white_passed_pawn_mask[64];
+U64 black_passed_pawn_mask[64];
+
+//get rank from square table
+const int get_rank[64] =
+{
+	7, 7, 7, 7, 7, 7, 7, 7,
+	6, 6, 6, 6, 6, 6, 6, 6,
+	5, 5, 5, 5, 5, 5, 5, 5,
+	4, 4, 4, 4, 4, 4, 4, 4,
+	3, 3, 3, 3, 3, 3, 3, 3,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	0, 0, 0, 0, 0, 0, 0, 0
+};
+// double pawns penalty
+const int double_pawn_penalty = -15;
+
+// isolated pawn penalty
+const int isolated_pawn_penalty = -10;
+
+// passed pawn bonus
+const int passed_pawn_bonus[8] = { 0, 5, 10, 20, 35, 50, 80, 150 };
+
+
+//function to set file or rank mask
+U64 set_file_and_rank_mask(int file_number, int rank_number) {
+	//file and rank mask
+	U64 mask= 0ULL;
+	//loop over files and ranks
+	for (int rank = 0; rank < 8; rank++) {
+		for (int file = 0; file < 8; file++) {
+			//initialize square
+			int square = rank*8 + file;
+			if (file_number != -1) {
+				//on file
+				if(file_number==file) {
+					//set mask
+					mask|= set_bit(mask, square);
+				}
+			}
+			else if (rank_number !=- 1) {
+				if(rank_number==rank) {
+					//set mask
+					mask|= set_bit(mask, square);
+				}
+
+			}
+
+		}
+	}
+
+	//return mask
+	return mask;
+
+}
+
+
+//function to initialize evaluation mask
+void init_evaluation_mask() {
+
+	//initialize file mask
+	for (int rank = 0; rank < 8; rank++) {
+		for (int file = 0; file < 8; file++) {
+			//initialize square
+			int square = rank*8 + file;
+			//initialize file mask for given square
+			file_mask[square] |= set_file_and_rank_mask(file,-1);
+
+		}
+	}
+	//initialize rank mask
+	for (int rank = 0; rank < 8; rank++) {
+		for (int file = 0; file < 8; file++) {
+			//initialize square
+			int square = rank*8 + file;
+			//initialize file mask for given square
+			rank_mask[square] |= set_file_and_rank_mask(-1,rank);
+
+		}
+	}
+
+	//initialize isolated pawn mask
+	for (int rank = 0; rank < 8; rank++) {
+		for (int file = 0; file < 8; file++) {
+			//initialize square
+			int square = rank*8 + file;
+			//initialize file mask for given square
+			isolated_pawn_mask[square] |= set_file_and_rank_mask(file-1,-1);
+			isolated_pawn_mask[square] |= set_file_and_rank_mask(file+1,-1);
+
+		}
+	}
+
+	//initialize black passed pawn mask
+	for (int rank = 0; rank < 8; rank++) {
+		for (int file = 0; file < 8; file++) {
+			//initialize square
+			int square = rank*8 + file;
+			//initialize file mask for given square
+			black_passed_pawn_mask[square] |= set_file_and_rank_mask(file-1,-1);
+			black_passed_pawn_mask[square] |= set_file_and_rank_mask(file+1,-1);
+			black_passed_pawn_mask[square] |= set_file_and_rank_mask(file,-1);
+
+			//reset redundant bits
+			for (int i = 0;i< rank+1; i++) {
+				black_passed_pawn_mask[square] &= ~rank_mask[i*8+file];
+
+			}
+		}
+	}
+
+	//initialize white passed pawn mask
+	for (int rank = 0; rank < 8; rank++) {
+		for (int file = 0; file < 8; file++) {
+			//initialize square
+			int square = rank*8 + file;
+			//initialize file mask for given square
+			white_passed_pawn_mask[square] |= set_file_and_rank_mask(file-1,-1);
+			white_passed_pawn_mask[square] |= set_file_and_rank_mask(file+1,-1);
+			white_passed_pawn_mask[square] |= set_file_and_rank_mask(file,-1);
+
+			//reset redundant bits
+			for (int i = 0;i< (8-rank); i++) {
+				white_passed_pawn_mask[square] &= ~rank_mask[(7-i)*8+file];
+
+			}
+		}
+	}
+}
+
+
+
+
+
+
+
+
 //evaluate position
 static inline int evaluate_position()
 {
@@ -2419,17 +2565,44 @@ static inline int evaluate_position()
 
 			//get score
 			score += material_score[piece];
-			//get positional score
 			switch (piece)
 			{
 			case P:
+				//get positional score
 				score += pawn_score[square];
+				//add double pawn penalty
+				int double_white_pawn = bit_count(bitboards[P] & file_mask[square]);
+				if (double_white_pawn>1) {
+					score+=double_pawn_penalty;
+				}
+
+				//isolated pawn penalty
+				if ((bitboards[P])& isolated_pawn_mask[square]==0) {
+					score+=isolated_pawn_penalty;
+				}
+				//passed pawn bonus
+				if ((white_passed_pawn_mask[square]&bitboards[p]) == 0) {
+					score+= passed_pawn_bonus[get_rank[square]];
+				}
 				break;
 			case p:
 				score -= pawn_score[mirror_score[square]];
+				int double_black_pawn = bit_count(bitboards[p] & file_mask[square]);
+				if (double_black_pawn>1) {
+					score-=double_pawn_penalty;
+				}
+				//isolated pawn penalty
+				if ((bitboards[p])& isolated_pawn_mask[square]==0) {
+					score-=isolated_pawn_penalty;
+				}
+				//passed pawn bonus
+				if ((black_passed_pawn_mask[square]&bitboards[P]) == 0) {
+					score-= passed_pawn_bonus[get_rank[mirror_score[square]]];
+				}
 				break;
 			case N:
 				score += knight_score[square];
+
 				break;
 			case n:
 				score -= knight_score[mirror_score[square]];
@@ -3699,6 +3872,9 @@ void init_all()
 
 	//clear transposition table
 	clear_transposition_table();
+
+	//initialize evaluation mask
+	init_evaluation_mask();
 }
 int main()
 {
@@ -3712,9 +3888,9 @@ int main()
 	//if debug mode is on
 	if (debug_mode)
 	{
-		parse_fen(start_position);
+		parse_fen(tricky_position);
 		print_board();
-		search_position(10);
+		printf("score: %d\n", evaluate_position());
 
 
 
