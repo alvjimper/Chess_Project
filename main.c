@@ -2195,13 +2195,13 @@ static inline void generate_moves(moves* move_list)
 
 
 //tree nodes(number of different positions reached at given depth)
-long nodes;
+U64 nodes;
 
 //perft driver
 
 static inline void perft_driver(int depth)
 {
-	//reccursion condition
+	//recursion condition
 	if (depth == 0)
 	{
 		//increment nodes count
@@ -2296,7 +2296,7 @@ void perft_test(int depth)
 
 	//print results
 	printf("\n\n Depth: %ld\n", depth);
-	printf(" Total Nodes: %ld\n", nodes);
+	printf(" Total Nodes: %lld\n", nodes);
 	printf(" Time: %d ms\n", get_time_ms()-start_time);
 
 }
@@ -2424,6 +2424,20 @@ const int isolated_pawn_penalty = -10;
 
 // passed pawn bonus
 const int passed_pawn_bonus[8] = { 0, 5, 10, 20, 35, 50, 80, 150 };
+
+//semi open file score
+const int semi_open_file=12;
+
+//open file score
+
+const int open_file = 20;
+
+//king safety bonus
+
+const int king_safety_bonus = 5;
+
+
+
 
 
 //function to set file or rank mask
@@ -2609,22 +2623,74 @@ static inline int evaluate_position()
 				break;
 			case B:
 				score += bishop_score[square];
+				//control square bonus
+				score += bit_count(get_bishop_attacks(square,occupancy[both]));
 				break;
 			case b:
 				score -= bishop_score[mirror_score[square]];
+				//control square bonus
+				score -= bit_count(get_bishop_attacks(square,occupancy[both]));
 				break;
 			case R:
 				score += rook_score[square];
+				//semi open file
+				if ((bitboards[P] & file_mask[square])==0) {
+					score+= semi_open_file;
+				}
+				//open file
+				if (((bitboards[P] | bitboards[p] ) & file_mask[square])==0) {
+					score+= open_file;
+				}
 				break;
 			case r:
 				score -= rook_score[mirror_score[square]];
+				//semi open file
+				if ((bitboards[p] & file_mask[square])==0) {
+					score-= semi_open_file;
+				}
+				//open file
+				if (((bitboards[P] | bitboards[p] ) & file_mask[square] )==0) {
+					score-= open_file;
+				}
 				break;
 			case K:
 				score += king_score[square];
+				//semi open file penaltie
+				if ((bitboards[P] & file_mask[square])==0) {
+					score-= semi_open_file;
+				}
+				//open file penaltie
+				if (((bitboards[P] | bitboards[p] ) & file_mask[square])==0) {
+					score-= open_file;
+				}
+
+				//safety occupancy bonus
+				score += bit_count(king_attacks[square] & occupancy[white])*king_safety_bonus;
+
 				break;
 			case k:
 				score -= king_score[mirror_score[square]];
+				//semi open file
+				if ((bitboards[p] & file_mask[square])==0) {
+					score+= semi_open_file;
+				}
+				//open file
+				if (((bitboards[P] | bitboards[p] ) & file_mask[square])==0) {
+					score+= open_file;
+				}
+				//safety occupancy bonus
+				score -= bit_count(king_attacks[square] & occupancy[black])*king_safety_bonus;
 				break;
+			case Q:
+				//control square bonus
+				score += bit_count(get_queen_attacks(square,occupancy[both]));
+
+				break;
+			case q:
+				//control square bonus
+				score -= bit_count(get_queen_attacks(square,occupancy[both]));
+				break;
+
 
 			}
 
@@ -3482,13 +3548,13 @@ void search_position(int depth)
 		beta = score + 50;
 		//Ttwo first options mate found for white and blacks, third option no mate yet.(whe divide/2 to transform plies aka half moves to full moves till mate. hte +-1 is to adjust distance in each color)
 		if (score > -mate_value && score < -mate_score)
-			printf("info score mate %d depth %d nodes %ld time %d pv ", -(score + mate_value) / 2 - 1, current_depth, nodes, get_time_ms() - starttime);
+			printf("info score mate %d depth %d nodes %lld time %d pv ", -(score + mate_value) / 2 - 1, current_depth, nodes, get_time_ms() - starttime);
 
 		else if (score > mate_score && score < mate_value)
-			printf("info score mate %d depth %d nodes %ld time %d pv ", (mate_value - score) / 2 + 1, current_depth, nodes, get_time_ms() - starttime);
+			printf("info score mate %d depth %d nodes %lld time %d pv ", (mate_value - score) / 2 + 1, current_depth, nodes, get_time_ms() - starttime);
 
 		else
-			printf("info score cp %d depth %d nodes %ld time %d pv ", score, current_depth, nodes, get_time_ms() - starttime);
+			printf("info score cp %d depth %d nodes %lld time %d pv ", score, current_depth, nodes, get_time_ms() - starttime);
 
 		//loop over principal variation
 		for (int count = 0; count < pv_length[0]; count++)
@@ -3731,7 +3797,9 @@ void parse_go(char* command)
 
 		// set up timing
 		time_var /= movestogo;
-		time_var -= 50;
+		if (time_var > 1500) {
+			time_var-= 50;
+		}
 		stoptime = starttime + time_var + inc;
 	}
 
@@ -3888,7 +3956,7 @@ int main()
 	//if debug mode is on
 	if (debug_mode)
 	{
-		parse_fen(tricky_position);
+		parse_fen( "k2r4/8/p7/8/8/8/P7/1K2R3 w - -");
 		print_board();
 		printf("score: %d\n", evaluate_position());
 
