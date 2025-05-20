@@ -2305,80 +2305,152 @@ void perft_test(int depth)
 /*****************************/
 
 //material score(pieces score)
-int material_score[12] = {
-	//white P,K,B,R,Q,K
-	100,300,350,500,1000,10000,
-	//black p,k,b,r,q,k
-	-100,-300,-350,-500,-1000,-10000,
+int material_score[2][12] = {
+	//OPENING->white P,N,B,R,Q,K //black p,n,b,r,q,k
+	100,300,320,500,900,20000, -100,-300,-320,-500,-900,-20000,
+	//ENDGAME->white P,N,B,R,Q,K //black p,n,b,r,q,k
+	100,320,340,510,910,20000, -100,-320,-340,-510,-910,-20000
+	};
+
+//game phases score
+//I have 6400 opening score
+const int opening_score= 5200;
+const int endgame_score= 2000;
+
+//game phases
+enum {opening,endgame,middlegame};
+
+enum {PAWN,KNIGHT,BISHOP,ROOK,QUEEN,KING};
 
 
-};
-// pawn positional score
-const int pawn_score[64] =
-{
-	  90,  90,  90,  90,  90,  90,  90,  90,
-	30,  30,  30,  40,  40,  30,  30,  30,
-	20,  20,  20,  30,  30,  30,  20,  20,
-	10,  10,  10,  20,  20,  10,  10,  10,
-	 5,   5,  10,  20,  20,   5,   5,   5,
-	 0,   0,   0,   5,   5,   0,   0,   0,
-	 0,   0,   0, -10, -10,   0,   0,   0,
-	 0,   0,   0,   0,   0,   0,   0,   0
-};
+//positional scores by pieces and phase
 
-// knight positional score
-const int knight_score[64] =
-{
-	 -15,-10,-5,-5,-5,-5,-10,-15,
-	 -10,-20,  0,  0,  0,  0,-20,-10,
-	-5,  0, 10, 20, 20, 20,  0,-5,
-	-5,  5, 20, 30, 30, 20,  5,-5,
-	-5,  0, 20, 30, 30, 20,  0,-5,
-	-5,  5, 10, 20, 20, 10,  5,-5,
-	-10,-20,  0,  5,  5,  0,-20,-5,
-	-15,-10,-5,-5,-5,-5,-10,-15
-};
+const int positional_score[2][6][64]=
+	//opening phase
+	{
+	//pawn
+	0,  0,  0,  0,  0,  0,  0,  0,
+	98,134, 61, 95, 68,126, 34,-11,
+	-6,  7, 26, 31, 65, 56, 25,-20,
+	-14, 13,  6, 21, 23, 12, 17,-23,
+	-27, -2, -5, 12, 17,  6, 10,-25,
+	-26, -4, -4,-10,  3,  3, 33,-12,
+	-35, -1,-20,-23,-15, 24, 38,-22,
+	0,  0,  0,  0,  0,  0,  0,  0,
 
-// bishop positional score
-const int bishop_score[64] =
-{
-	 -20,-10,-10,-10,-10,-10,-10,-20,
-	-10,  0,  0,  0,  0,  0,  0,-10,
-	-10,  0,  5, 10, 10,  5,  0,-10,
-	-10,  5,  5, 20, 20,  5,  5,-10,
-	-10,  0, 10, 20, 20, 10,  0,-10,
-	-10, 10, 10, 10, 10, 10, 10,-10,
-	-10,  5,  0,  0,  0,  0,  5,-10,
-	-20,-10,-30,-10,-10,-30,-10,-20
 
-};
+	//Knight
+	-167,-89,-34,-49, 61,-97,-15,-107,
+	-73,-41, 72, 36, 23, 62,  7,-17,
+	-47, 60, 37, 65, 84,129, 73, 44,
+	 -9, 17, 19, 53, 37, 69, 18, 22,
+	-13,  4, 16, 13, 28, 19, 21, -8,
+	 -23,- 9, 12, 10, 19, 17, 25,-16,
+	-29,-53,-12,- 3,- 1, 18,-14,-19,
+	-105,-21,-58,-33,-17,-28,-19,-23,
 
-// rook positional score
-const int rook_score[64] =
-{
-	 50, 50, 50, 50, 50, 50, 50, 50,
-	 50, 50, 50, 50, 50, 50, 50, 50,
-	-5,  0,  10,  10,  10,  10,  0, -5,
-	-5,  0,  10,  20,  20,  10,  0, -5,
-	-5,  0,  10,  20,  20,  10,  0, -5,
-	-5,  0,  10,  10,  10,  10,  0, -5,
-	-5,  0,  10,  10,  0,  10,  0, -5,
-	 0,  0,  0,  20, 20,  0,  0,  0
+	//Bishop
+	-29,  4, -82,-37,-25,-42,  7,-8,
+	-26, 16, -18, -1,- 8,-23,  6,-19,
+	-9, 20,  34, 43, 45, 33, 48, 30,
+	-20,  6, 20, 49, 44, 43, 40,  7,
+	-19, 22, 24, 45, 40, 57, 36, 13,
+	-32, 16, 30, 40, 34, 40, 30, -4,
+	-21,- 3, 23, 36, 24, 8, 17,-23,
+	-5, -9,-26,-16,-7,-17,-14,-24,
 
-};
+	//Rook
+	32, 42, 32, 51,63, 9, 31, 43,
+	27,32,58,62,80,67,26,44,
+	-5,19,26,36,17,45,61,16,
+	-24,-11, 7,26,24,35,-8,-20,
+	-36,-26,-12,-1,9,-7,6,-23,
+	-45,-25,-16,-17,3,0,-5,-33,
+	-44,-16,-20,-9,-1,11,-6,-71,
+	-19,-13, 1,17,16,7,-37,-26,
 
-// king positional score
-const int king_score[64] =
-{
-	 0,   0,   0,   0,   0,   0,   0,   0,
-	 0,   0,   5,   5,   5,   5,   0,   0,
-	 0,   5,   5,  10,  10,   5,   5,   0,
-	 0,   5,  10,  20,  20,  10,   5,   0,
-	 0,   5,  10,  20,  20,  10,   5,   0,
-	 0,   0,   5,  10,  10,   5,   0,   0,
-	 0,   5,   5,  -5,  -5,   0,   5,   0,
-	 0,   0,   5,   0, -15,   0,  10,   0
-};
+
+
+	//queen
+	-28,0,29,12,59,44,43,45,
+	-24,-39,-5,1,-16,57,28,54,
+	-13,-17,7,8,29,56,47,57,
+	-27,-27,-16,-16,-1,17,-2,1,
+	-9,-26,-9,-10,-2,-4,3,-3,
+	-14,2,-11,-2,-5,2,14,5,
+	-35,-8,11,2,8,15,-3,1,
+	-1,-18,-9,10,-15,-25,-31,-50,
+
+	//King
+	-65, 23, 16, -15,-56,-34, 2, 13,
+	 29,-1,-20,-7,-8,-4,-38,-29,
+	 -9,24,2,-16,-20,6,22,-22,
+	-17,-20,-12,-27,-30,-25,-14,-36,
+	-49,-1,-27,-39,-46,-44,-33,-51,
+	-14,-14,-22,-46,-44,-30,-15,-27,
+	1,7,-8,-64,-43,-16,9,8,
+	-15,36,12,-54,8,-28,24,14,
+
+
+	//ENDGAME PHASE///
+
+	//Pawn
+	0,  0,  0,  0,  0,  0,  0,  0,
+	178,173,158,134,147,132,165,187,
+	94,100, 85, 67, 56, 53, 82, 84,
+	32, 24, 13,  5, -2,  4, 17, 17,
+	13,  9, -3,- 7,- 7,- 8,  3, -1,
+	4,  7, -6,  1,  0,- 5,- 1,- 8,
+	13,  8,  8, 10, 13,  0,  2, -7,
+	0,  0,  0,  0,  0,  0,  0,  0,
+	//knight
+	-58,-38,-13,-28,-31,-27,-63,-99,
+	-25,- 8,-25,- 2,- 9,-25,-24,-52,
+	-24,-20, 10,  9, -1,- 9,-19,-41,
+	-17,  3, 22, 22, 22, 11,  8,-18,
+	-18,- 6, 16, 25, 16, 17,  4,-18,
+	-23,- 3, 15, 24,  7,  9,-11,-25,
+	-29,-11,- 9,- 5,- 3,-13,-19,-41,
+	-105,-21,-58,-33,-17,-28,-19,-23,
+	//bishop
+	-14,-21,-11,-8,-7,-9,-17,-24,
+	-8,-4, 7,-12,-3,-13,-4,-14,
+	2,-8, 0,-1,-2,6,0,4,
+	-3,9,12,9,14,10,3,2,
+	-6,3,13,19,7,10,-3,-9,
+	-12,-3,8,10,13,3,-7,-15,
+	-14,-18,-7,-1,4,-9,-15,-27,
+	-23,-9,-23,-5,-9,-16,-5,-17,
+	//rook
+	13,10,18,15,12,12,8,5,
+	11,13,13,11,-3,3,8,3,
+	7,7,7,5,4,-3,-5,-3,
+	4,3,13,1,2,1,-1,2,
+	3,5,8,4,-5,-6,-8,-11,
+	-4,0,-5,-1,-7,-12,-8,-16,
+	-6,-6,0,2,-9,-9,-11,-3,
+	-9,2,3,-1,-5,-13,4,-20,
+	//queen
+	-9,22,22,27,27,19,10,20,
+	-17,20,32,41,58,25,30,0,
+	-20,6,9,49,47,35,19,9,
+	3,22,24,45,57,40,57,36,
+	-18,28,19,47,31,34,39,23,
+	-16,-27,15,6,9,17,10,5,
+	-22,-23,-30,-16,-16,-23,-36,-32,
+	-33,-28,-22,-43,-5,-32,-20,-41,
+	//king
+	-74,-35,-18,-18,-11,15,4,-17,
+	-12,17,14,17,17,38,23,11,
+	10,17,23,15,20,45,44,13,
+	-8,22,24,27,26,33,26,3,
+	-18,-4,21,24,27,23,9,-11,
+	-19,-3,11,21,23,16,7,-9,
+	-27,-11,4,13,14,4,-5,-17,
+	-53,-34,-21,-11,-28,-14,-24,-43
+
+	};
+
 
 // mirror positional score tables for opposite color
 const int mirror_score[128] =
@@ -2392,6 +2464,8 @@ const int mirror_score[128] =
 	a7, b7, c7, d7, e7, f7, g7, h7,
 	a8, b8, c8, d8, e8, f8, g8, h8
 };
+
+
 
 
 //define file mask for pawns
@@ -2546,8 +2620,22 @@ void init_evaluation_mask() {
 	}
 }
 
+//get score depends on phase of game we are
+static inline int game_phase_score() {
+	//score for color pieces y different phases
+	int white_piece=0, black_piece=0;
 
-
+	//existent white pieces scores
+	for (int piece = N; piece <=Q; piece++) {
+		white_piece += bit_count(bitboards[piece]) * material_score[opening][piece];
+	}
+	//existent black pieces scores
+	for (int piece = n; piece <=q; piece++) {
+		black_piece += bit_count(bitboards[piece]) * -material_score[opening][piece];
+	}
+	//return game phase score
+	return white_piece + black_piece;
+}
 
 
 
@@ -2556,12 +2644,33 @@ void init_evaluation_mask() {
 //evaluate position
 static inline int evaluate_position()
 {
+
+	//initialize phase of the game
+	int game_phase = -1;
+
+	//get game phase score
+	int phase_score = game_phase_score();
+
+	//get game phase based in current game score(6400 our start pos score)
+	if (phase_score > opening_score) {
+		game_phase = opening;
+	}
+	else if (phase_score < endgame_score) {
+		game_phase = endgame;
+	}
+	else {
+		game_phase = middlegame;
+	}
+
 	//initialize score
 	int score = 0;
 	//initialize current piece bitboard
 	U64 bitboard;
 	//initialize piece and square
 	int piece, square;
+
+	//initialize double pawns
+	int double_pawn = 0;
 
 	//loop over pieces
 	for (int bbpiece = P; bbpiece <= k; bbpiece++)
@@ -2572,21 +2681,36 @@ static inline int evaluate_position()
 		//loop over pieces in bitboard
 		while (bitboard)
 		{
-			//get piece square
-			square = get_lsb_index(bitboard);
 			//get piece
 			piece = bbpiece;
+			//get piece square
+			square = get_lsb_index(bitboard);
+			//game between opening and engame windows= middlegame
+			if (game_phase==middlegame){
+				//calculated score values between opening and endgame
+				score += (material_score[opening][piece] * phase_score+ material_score[endgame][piece]* (opening_score - phase_score))/opening_score;
+			}
+			//material score weigths in opnening/endgame windows
+			else{
+				score += material_score[game_phase][piece];
 
-			//get score
-			score += material_score[piece];
+			}
+
 			switch (piece)
 			{
 			case P:
-				//get positional score
-				score += pawn_score[square];
+				//calculated score in middlegame
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score += (positional_score[opening][PAWN][square] * phase_score+ positional_score[endgame][PAWN][square]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score += positional_score[game_phase][PAWN][square];
+
+				}
 				//add double pawn penalty
-				int double_white_pawn = bit_count(bitboards[P] & file_mask[square]);
-				if (double_white_pawn>1) {
+				double_pawn = bit_count(bitboards[P] & file_mask[square]);
+				if (double_pawn>1) {
 					score+=double_pawn_penalty;
 				}
 
@@ -2600,9 +2724,17 @@ static inline int evaluate_position()
 				}
 				break;
 			case p:
-				score -= pawn_score[mirror_score[square]];
-				int double_black_pawn = bit_count(bitboards[p] & file_mask[square]);
-				if (double_black_pawn>1) {
+				//calculated score in middlegame
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score -= (positional_score[opening][PAWN][mirror_score[square]] * phase_score+ positional_score[endgame][PAWN][mirror_score[square]]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score -= positional_score[game_phase][PAWN][mirror_score[square]];
+
+				}
+				double_pawn = bit_count(bitboards[p] & file_mask[square]);
+				if (double_pawn>1) {
 					score-=double_pawn_penalty;
 				}
 				//isolated pawn penalty
@@ -2615,24 +2747,59 @@ static inline int evaluate_position()
 				}
 				break;
 			case N:
-				score += knight_score[square];
+				//calculated score in middlegame
+					if (game_phase==middlegame){
+						//calculated score values between opening and endgame
+						score += (positional_score[opening][KNIGHT][square] * phase_score+ positional_score[endgame][KNIGHT][square]* (opening_score - phase_score))/opening_score;
+					}
+					else{
+						score += positional_score[game_phase][KNIGHT][square];
 
+					}
 				break;
 			case n:
-				score -= knight_score[mirror_score[square]];
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score -= (positional_score[opening][KNIGHT][mirror_score[square]] * phase_score+ positional_score[endgame][KNIGHT][mirror_score[square]]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score -= positional_score[game_phase][KNIGHT][mirror_score[square]];
+
+				}
 				break;
 			case B:
-				score += bishop_score[square];
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score += (positional_score[opening][BISHOP][square] * phase_score+ positional_score[endgame][BISHOP][square]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score += positional_score[game_phase][BISHOP][square];
+
+				}
 				//control square bonus
 				score += bit_count(get_bishop_attacks(square,occupancy[both]));
 				break;
 			case b:
-				score -= bishop_score[mirror_score[square]];
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score -= (positional_score[opening][BISHOP][mirror_score[square]] * phase_score+ positional_score[endgame][BISHOP][mirror_score[square]]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score -= positional_score[game_phase][BISHOP][mirror_score[square]];
+
+				}
 				//control square bonus
 				score -= bit_count(get_bishop_attacks(square,occupancy[both]));
 				break;
 			case R:
-				score += rook_score[square];
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score += (positional_score[opening][ROOK][square] * phase_score+ positional_score[endgame][ROOK][square]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score += positional_score[game_phase][ROOK][square];
+
+				}
 				//semi open file
 				if ((bitboards[P] & file_mask[square])==0) {
 					score+= semi_open_file;
@@ -2643,7 +2810,14 @@ static inline int evaluate_position()
 				}
 				break;
 			case r:
-				score -= rook_score[mirror_score[square]];
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score -= (positional_score[opening][ROOK][mirror_score[square]] * phase_score+ positional_score[endgame][ROOK][mirror_score[square]]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score -= positional_score[game_phase][ROOK][mirror_score[square]];
+
+				}
 				//semi open file
 				if ((bitboards[p] & file_mask[square])==0) {
 					score-= semi_open_file;
@@ -2654,7 +2828,14 @@ static inline int evaluate_position()
 				}
 				break;
 			case K:
-				score += king_score[square];
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score += (positional_score[opening][KING][square] * phase_score+ positional_score[endgame][KING][square]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score += positional_score[game_phase][KING][square];
+
+				}
 				//semi open file penaltie
 				if ((bitboards[P] & file_mask[square])==0) {
 					score-= semi_open_file;
@@ -2669,7 +2850,14 @@ static inline int evaluate_position()
 
 				break;
 			case k:
-				score -= king_score[mirror_score[square]];
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score -= (positional_score[opening][KING][mirror_score[square]] * phase_score+ positional_score[endgame][KING][mirror_score[square]]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score -= positional_score[game_phase][KING][mirror_score[square]];
+
+				}
 				//semi open file
 				if ((bitboards[p] & file_mask[square])==0) {
 					score+= semi_open_file;
@@ -2682,11 +2870,27 @@ static inline int evaluate_position()
 				score -= bit_count(king_attacks[square] & occupancy[black])*king_safety_bonus;
 				break;
 			case Q:
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score += (positional_score[opening][QUEEN][square] * phase_score+ positional_score[endgame][QUEEN][square]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score += positional_score[game_phase][QUEEN][square];
+
+				}
 				//control square bonus
 				score += bit_count(get_queen_attacks(square,occupancy[both]));
 
 				break;
 			case q:
+				if (game_phase==middlegame){
+					//calculated score values between opening and endgame
+					score -= (positional_score[opening][QUEEN][mirror_score[square]] * phase_score+ positional_score[endgame][QUEEN][mirror_score[square]]* (opening_score - phase_score))/opening_score;
+				}
+				else{
+					score -= positional_score[game_phase][QUEEN][mirror_score[square]];
+
+				}
 				//control square bonus
 				score -= bit_count(get_queen_attacks(square,occupancy[both]));
 				break;
@@ -2705,6 +2909,7 @@ static inline int evaluate_position()
 		return (color == white) ? score : -score;
 
 }
+
 
 
 
@@ -2787,8 +2992,11 @@ int current_pv, score_pv;
  *
 ****************************************/
 
+
+// number of entries for TT
+int hash_entries = 0;
 // hash table size
-#define hash_size 0x400000
+#define hash_size 2680000
 
 //no hash constant
 
@@ -3196,7 +3404,7 @@ static inline int quiescence_search(int alpha, int beta)
 //constants of LMR
 
 const int full_depth_lmr = 4;
-const int reduction_limit = 2;
+const int reduction_limit = 3;
 
 //negamax search with alpha beta pruning
 static inline int negamax(int alpha, int beta, int depth)
@@ -3287,7 +3495,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		//search move with reduced depth -> depth -1 - r where r is the reduction limit
 
 		//call recursive function and score current move
-		score = -negamax(-beta, -beta + 1, depth - 1 - reduction_limit);
+		score = -negamax(-beta, -beta + 1, depth - 1 - 2);
 
 		//decrement ply
 		ply--;
@@ -3365,7 +3573,7 @@ static inline int negamax(int alpha, int beta, int depth)
 			{
 
 				//search with reduction
-				score = -negamax(-alpha - 1, -alpha, depth - reduction_limit);
+				score = -negamax(-alpha - 1, -alpha, depth - 2);
 			}
 			else
 			{
@@ -3513,28 +3721,29 @@ void search_position(int depth)
 
 
 	//initialize alpha and beta
-	int alpha = -50000;
-	int beta = 50000;
+	int alpha = -infinity;
+	int beta = infinity;
 
 	//iteratively deepening search
 
 	//loop over depth
 	for (int current_depth = 1; current_depth <= depth; current_depth++)
 	{
-
-
-
-		//enable PV flag
-		current_pv = 1;
-
-		//find best move in current position
-		score = negamax(-infinity, infinity, current_depth);
 		//if time is up
 		if (stopped == 1)
 		{
 			//stop engine and return current best move
 			break;
 		}
+
+
+		//enable PV flag
+		current_pv = 1;
+
+		//find best move in current position
+		score = negamax(alpha, beta, current_depth);
+
+
 
 		// if score is outcolor the window, try again with a full-width aspiration window and same depth
 		if ((score <= alpha) || (score >= beta)) {
@@ -3546,24 +3755,26 @@ void search_position(int depth)
 		// adjust aspiration window
 		alpha = score - 50;
 		beta = score + 50;
-		//Ttwo first options mate found for white and blacks, third option no mate yet.(whe divide/2 to transform plies aka half moves to full moves till mate. hte +-1 is to adjust distance in each color)
-		if (score > -mate_value && score < -mate_score)
-			printf("info score mate %d depth %d nodes %lld time %d pv ", -(score + mate_value) / 2 - 1, current_depth, nodes, get_time_ms() - starttime);
+		if (pv_length[0]) {
+			//Ttwo first options mate found for white and blacks, third option no mate yet.(whe divide/2 to transform plies aka half moves to full moves till mate. hte +-1 is to adjust distance in each color)
+			if (score > -mate_value && score < -mate_score)
+				printf("info score mate %d depth %d nodes %lld time %d pv ", -(score + mate_value) / 2 - 1, current_depth, nodes, get_time_ms() - starttime);
 
-		else if (score > mate_score && score < mate_value)
-			printf("info score mate %d depth %d nodes %lld time %d pv ", (mate_value - score) / 2 + 1, current_depth, nodes, get_time_ms() - starttime);
+			else if (score > mate_score && score < mate_value)
+				printf("info score mate %d depth %d nodes %lld time %d pv ", (mate_value - score) / 2 + 1, current_depth, nodes, get_time_ms() - starttime);
 
-		else
-			printf("info score cp %d depth %d nodes %lld time %d pv ", score, current_depth, nodes, get_time_ms() - starttime);
+			else
+				printf("info score cp %d depth %d nodes %lld time %d pv ", score, current_depth, nodes, get_time_ms() - starttime);
 
-		//loop over principal variation
-		for (int count = 0; count < pv_length[0]; count++)
-		{
-			//print PV moves
-			print_moves(pv_table[0][count]);
-			printf(" ");
+			//loop over principal variation
+			for (int count = 0; count < pv_length[0]; count++)
+			{
+				//print PV moves
+				print_moves(pv_table[0][count]);
+				printf(" ");
+			}
+			printf("\n");
 		}
-		printf("\n");
 	}
 
 
@@ -3729,9 +3940,22 @@ void parse_position(char* command)
 	//print board
 	print_board();
 }
+
+void reset_time() {
+	//reset time control
+	quit =0;
+	movestogo = 30;
+	movetime = -1;
+	inc = 0;
+	starttime = 0;
+	stoptime = 0;
+	timeset = 0;
+	stopped = 0;
+}
 //parse UCI go command
 void parse_go(char* command)
 {
+	reset_time();
 	//initilize depth
 	int depth = -1;
 	//initialize pointer to current depth
@@ -3809,7 +4033,7 @@ void parse_go(char* command)
 			depth = 64;
 
 	// print debug info
-	printf("time:%d start:%d stop:%d depth:%d timeset:%d\n",
+	printf("time:%d start:%u stop:%u depth:%d timeset:%d\n",
 	time_var, starttime, stoptime, depth, timeset);
 
 	// search position
@@ -3956,9 +4180,9 @@ int main()
 	//if debug mode is on
 	if (debug_mode)
 	{
-		parse_fen( "k2r4/8/p7/8/8/8/P7/1K2R3 w - -");
+		parse_fen( start_position);
 		print_board();
-		printf("score: %d\n", evaluate_position());
+		printf("score: %d\n",evaluate_position());
 
 
 
