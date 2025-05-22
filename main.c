@@ -103,6 +103,10 @@ int history_index;
 int ply;
 
 
+//50 king moves rule
+int fifty_moves;
+
+
 
 
 
@@ -529,23 +533,35 @@ void print_board()
 
 
 }
-
-
-
-//parse FEN notation
-void parse_fen(char* fen) {
-	//reset board and state variables
+// reset board variables
+void reset_board()
+{
+	// reset board position (bitboards)
 	memset(bitboards, 0ULL, sizeof(bitboards));
+
+	// reset occupancy
 	memset(occupancy, 0ULL, sizeof(occupancy));
+
+	// reset game state variables
 	color = 0;
 	en_passant = no_square;
 	castling = 0;
 
-	//reset history index
-	history_index=0;
+	// reset repetition index
+	history_index = 0;
 
-	//reset history_table
+	// reset fifty move rule counter
+	fifty_moves = 0;
+
+	// reset repetition table
 	memset(history_table, 0ULL, sizeof(history_table));
+}
+
+
+//parse FEN notation
+void parse_fen(char* fen) {
+	//reset board
+	reset_board();
 
 	//loop over board ranks
 	for (int rank = 0; rank < 8; rank++)
@@ -641,7 +657,14 @@ void parse_fen(char* fen) {
 		//set en passant square
 		en_passant = rank * 8 + file;
 	}
-	else en_passant = no_square;
+	else {
+		en_passant = no_square;
+	}
+	//go to ply counter
+	fen++;
+
+	//parse ply top initialize 50 moves
+	fifty_moves= atoi(fen);
 
 	//initialize white and black occupancy
 	occupancy[white] = bitboards[P] | bitboards[N] | bitboards[B] | bitboards[R] | bitboards[Q] | bitboards[K];
@@ -1450,10 +1473,11 @@ void print_moves_list(moves* move_list)
 //preserve board state
 #define copy_board()						\
 	U64 bitboard_copy[12], occupancy_copy[3];	\
-	int color_copy, en_passant_copy, castling_copy;	\
+	int color_copy, en_passant_copy, castling_copy, fifty_copy;	\
 	memcpy(bitboard_copy, bitboards, sizeof(bitboards));	\
 	memcpy(occupancy_copy, occupancy, sizeof(occupancy));	\
 	color_copy = color, en_passant_copy = en_passant, castling_copy = castling;	\
+	fifty_copy = fifty_moves;                                                   \
 	U64 hash_key_copy = hash_key;													\
 
 
@@ -1462,6 +1486,7 @@ void print_moves_list(moves* move_list)
 	memcpy(bitboards, bitboard_copy, sizeof(bitboards));  \
 	memcpy(occupancy, occupancy_copy, sizeof(occupancy));  \
 	color = color_copy, en_passant = en_passant_copy, castling = castling_copy; \
+	fifty_moves = fifty_copy;                                                   \
 	hash_key = hash_key_copy;														\
 
 
@@ -1512,9 +1537,19 @@ static inline int make_move(int move, int move_flag)
 		hash_key ^= piece_keys[piece][source_square];//remove from source square
 		hash_key ^= piece_keys[piece][target_square];//move to target square
 
-		//dealing with caspture moves
+		//increment 50 moves counter
+		fifty_moves++;
+
+		// if pawn moved
+		if (piece == P || piece == p)
+			// reset 50 move rule counter
+				fifty_moves = 0;
+
+		//dealing with capture moves
 		if (capture)
 		{
+			//reset 50 moves counter
+			fifty_moves=0;
 			//get captured piece index range depending on color
 			int first_piece, last_piece;
 			//white to move
@@ -2491,7 +2526,7 @@ const int get_rank[64] =
 	0, 0, 0, 0, 0, 0, 0, 0
 };
 // double pawns penalty
-const int double_pawn_penalty = -15;
+const int double_pawn_penalty = -8;
 
 // isolated pawn penalty
 const int isolated_pawn_penalty = -10;
@@ -2964,6 +2999,7 @@ typedef struct {
 	int depth;      // current search depth
 	int flag;       // flag that tells us the type of node (fail-low/fail-high/PV)
 	int score;      // score (alpha/beta/PV)
+	int best_move;  // best move (best score)
 } tt;               // transposition table (hash table)
 
 // define tansposition table instance
@@ -2981,6 +3017,7 @@ void clear_transposition_table()
 		hash_pointer->flag =0;
 		hash_pointer->depth = 0;
 		hash_pointer->score = 0;
+
 
 	}
 }
@@ -3013,7 +3050,7 @@ void init_transposition_table(int mb) {
 
 
 //read hash of transposition table
-static inline int read_hash_tt(int alpha, int beta, int depth) {
+static inline int read_hash_tt(int alpha, int beta,int* best_move, int depth) {
 
 	//initialize tt pointer that store specific hash entry (current board info)
 	tt* hash_pointer=&transposition_table[hash_key % tt_entries];
@@ -3047,6 +3084,8 @@ static inline int read_hash_tt(int alpha, int beta, int depth) {
 				//return beta
 				return beta;
 			}
+			//store best move in transposition table
+			*best_move = hash_pointer->best_move;
 
 		}
 
@@ -3059,7 +3098,7 @@ static inline int read_hash_tt(int alpha, int beta, int depth) {
 
 //record hash to transposition table
 
-static inline void record_hash_to_tt(int score,int depth,int hash_flag) {
+static inline void record_hash_to_tt(int score,int best_move,int depth,int hash_flag) {
 
 	//initialize tt pointer that store specific hash entry (current board info)
 	tt* hash_pointer=&transposition_table[hash_key % tt_entries];
@@ -3078,6 +3117,7 @@ static inline void record_hash_to_tt(int score,int depth,int hash_flag) {
 	hash_pointer->score=score;
 	hash_pointer->flag=hash_flag;
 	hash_pointer->depth=depth;
+	hash_pointer->best_move=best_move;
 
 
 }
@@ -3196,16 +3236,23 @@ static inline int score_move(int move)
 	return 0;
 }
 //sort moves in decreasing order
-static inline void sort_moves(moves* move_list)
+static inline void sort_moves(moves* move_list,int best_move)
 {
 	//score moves
-	int move_scores[256] = {NULL};
+	int move_scores[move_list->count];
 
 	//loop over moves
 	for (int count = 0; count < move_list->count; count++)
 	{
-		//score move
-		move_scores[count] = score_move(move_list->moves[count]);
+		if (best_move == move_list->moves[count]) {
+			//score move
+			move_scores[count] = 30000;
+		}
+		else {
+			//score move
+			move_scores[count] = score_move(move_list->moves[count]);
+		}
+
 	}
 		//loop over current moves
 	for (int current_move = 0; current_move < move_list->count; current_move++)
@@ -3313,7 +3360,7 @@ static inline int quiescence_search(int alpha, int beta)
 	//generate moves
 	generate_moves(move_list);
 	//sort moves
-	sort_moves(move_list);
+	sort_moves(move_list,0);
 
 
 	//loop over moves
@@ -3388,23 +3435,28 @@ const int reduction_limit = 3;
 //negamax search with alpha beta pruning
 static inline int negamax(int alpha, int beta, int depth)
 {
+	//initialize PV length
+	pv_length[ply] = ply;
 
+	//initialize hash flag
+	int hash_flag = hash_flag_alpha;
 	//initialize score variable
 	int score;
+	//initialize best move var for the transposition table
+	int best_move=0;
+
 	//if repetition happens
-	if (ply && rep_detection()) {
+	if (ply && rep_detection()|| fifty_moves>100) {
 		//return draw
 		return 0;
 	}
 	//initialize principal variation node (if is greater than 1 then is inside the window so it is pv)
 	int pv_node= beta-alpha > 1;
 
-	//initialize hash flag
 
-	int hash_flag = hash_flag_alpha;
 
 	//read hash position if is available, is not a root ply and the node is not PV
-	if (ply && (score = read_hash_tt(alpha, beta, depth)) != no_hash && !pv_node ){
+	if (ply && (score = read_hash_tt(alpha, beta,&best_move, depth)) != no_hash && !pv_node ){
 		//if the move have been already search return this score without searching it
 		return score;
 	}
@@ -3444,6 +3496,21 @@ static inline int negamax(int alpha, int beta, int depth)
 	}
 	//legal move count
 	int legal_moves = 0;
+
+	//initialize static evaluation
+	int static_evaluation = evaluate_position();
+
+	// evaluation pruning / static null move pruning
+	if (depth < 3 && !pv_node && !in_check &&  abs(beta - 1) > -infinity + 100)
+	{
+		// define evaluation margin
+		int evaluation_window = 120 * depth;
+
+		// evaluation window  from static evaluation score fails high
+		if (static_evaluation - evaluation_window >= beta)
+			// evaluation window from static evaluation score
+				return static_evaluation - evaluation_window;
+	}
 
 	//null move pruning
 	//if depth is greater than 3 and not in check
@@ -3495,7 +3562,44 @@ static inline int negamax(int alpha, int beta, int depth)
 			return beta;
 		}
 	}
+	// appliying razoring
+	if (!pv_node && !in_check && depth <= 3)
+	{
+		// store static eval and add first bonus
+		score = static_evaluation + 125;
 
+		// define new score
+		int new_score;
+
+		// static evaluation indicates a fail-low node
+		if (score < beta)
+		{
+			// on depth 1
+			if (depth == 1)
+			{
+				// get quiscence score
+				new_score = quiescence_search(alpha, beta);
+
+				// return quiescence score if is greater than static evaluation score
+				return (new_score > score) ? new_score : score;
+			}
+
+			// sore and add second bonus to static evaluation
+			score += 175;
+
+			// static evaluation indicates a fail-low node
+			if (score < beta && depth <= 2)
+			{
+				// get quiscence score
+				new_score = quiescence_search(alpha, beta);
+
+				// quiescence score indicates fail-low node
+				if (new_score < beta)
+					// return quiescence score if is greater than static evaluation score
+						return (new_score > score) ? new_score : score;
+			}
+		}
+	}
 	//create move list
 	moves move_list[1];
 	//generate moves
@@ -3506,7 +3610,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		enable_pv_score(move_list);
 	}
 	//sort moves
-	sort_moves(move_list);
+	sort_moves(move_list,best_move);
 
 	//moves searched in move list
 	int moves_searched = 0;
@@ -3600,6 +3704,9 @@ static inline int negamax(int alpha, int beta, int depth)
 		{
 			//change hash flag from tt to the PV node flag(exact flag)
 			hash_flag = hash_flag_exact;
+
+			//store best current  move in transposition table
+			best_move = move_list->moves[count];
 			//set book move on quiet moves
 			if (get_capture_move(move_list->moves[count]) == 0)
 			{
@@ -3629,7 +3736,7 @@ static inline int negamax(int alpha, int beta, int depth)
 			if (score >= beta)
 			{
 				//record hash position with score equal to beta
-				record_hash_to_tt(beta,depth,hash_flag_beta);
+				record_hash_to_tt(beta,best_move,depth,hash_flag_beta);
 
 				//in quiet move
 				if(get_capture_move(move_list->moves[count])==0)
@@ -3665,7 +3772,7 @@ static inline int negamax(int alpha, int beta, int depth)
 	}
 
 	//record hash position with score equal to alpha
-	record_hash_to_tt(alpha,depth,hash_flag);
+	record_hash_to_tt(alpha,best_move,depth,hash_flag);
 
 	//node(move) fails low
 	return alpha;
@@ -3976,6 +4083,16 @@ void parse_go(char* command)
 	if(input_var = strstr(command,"depth"))
 		//convert to int and set depth
 		depth = atoi(input_var + 6);
+	// run perft at given depth
+	if ((command = strstr(command,"perft"))) {
+		// parse search depth
+		depth = atoi(command + 6);
+
+		// run perft
+		perft_test(depth);
+
+		return;
+	}
 	// if move time is not available
 	if(movetime != -1)
 	{
@@ -4003,7 +4120,13 @@ void parse_go(char* command)
 		if (time_var > 1500) {
 			time_var-= 50;
 		}
+		//initialize stoptime
 		stoptime = starttime + time_var + inc;
+
+		// when low time inc is the time we have per move
+		if (time_var<1500 && inc && depth == 64) {
+			stoptime = starttime + inc - 50;
+		}
 	}
 
 	// if depth is not available
@@ -4180,7 +4303,7 @@ int main()
 	{
 		parse_fen( start_position);
 		print_board();
-		printf("score: %d\n",evaluate_position());
+		search_position(10);
 
 		free(transposition_table);
 
@@ -4191,6 +4314,7 @@ int main()
 	{
 		//connect to GUI
 		uci_loop();
+
 	}
 
 
