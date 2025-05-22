@@ -2662,8 +2662,8 @@ static inline int evaluate_position()
 		game_phase = middlegame;
 	}
 
-	//initialize score
-	int score = 0;
+	//initialize scores
+	int score=0,score_opening=0,score_endgame =0;
 	//initialize current piece bitboard
 	U64 bitboard;
 	//initialize piece and square
@@ -2685,29 +2685,17 @@ static inline int evaluate_position()
 			piece = bbpiece;
 			//get piece square
 			square = get_lsb_index(bitboard);
-			//game between opening and engame windows= middlegame
-			if (game_phase==middlegame){
-				//calculated score values between opening and endgame
-				score += (material_score[opening][piece] * phase_score+ material_score[endgame][piece]* (opening_score - phase_score))/opening_score;
-			}
-			//material score weigths in opnening/endgame windows
-			else{
-				score += material_score[game_phase][piece];
+			//initialize different scores
+			score_opening += material_score[opening][piece];
+			score_endgame += material_score[endgame][piece];
 
-			}
 
 			switch (piece)
 			{
 			case P:
-				//calculated score in middlegame
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score += (positional_score[opening][PAWN][square] * phase_score+ positional_score[endgame][PAWN][square]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score += positional_score[game_phase][PAWN][square];
-
-				}
+				//calculated score in game phases
+				score_opening += positional_score[opening][PAWN][square];
+				score_endgame += positional_score[endgame][PAWN][square];
 				//add double pawn penalty
 				double_pawn = bit_count(bitboards[P] & file_mask[square]);
 				if (double_pawn>1) {
@@ -2724,15 +2712,13 @@ static inline int evaluate_position()
 				}
 				break;
 			case p:
-				//calculated score in middlegame
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score -= (positional_score[opening][PAWN][mirror_score[square]] * phase_score+ positional_score[endgame][PAWN][mirror_score[square]]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score -= positional_score[game_phase][PAWN][mirror_score[square]];
+				//calculated score in game phases
+				score_opening -= positional_score[opening][PAWN][mirror_score[square]];
+				score_endgame -= positional_score[endgame][PAWN][mirror_score[square]];
 
-				}
+
+
+				//double pawn penalty
 				double_pawn = bit_count(bitboards[p] & file_mask[square]);
 				if (double_pawn>1) {
 					score-=double_pawn_penalty;
@@ -2747,59 +2733,34 @@ static inline int evaluate_position()
 				}
 				break;
 			case N:
-				//calculated score in middlegame
-					if (game_phase==middlegame){
-						//calculated score values between opening and endgame
-						score += (positional_score[opening][KNIGHT][square] * phase_score+ positional_score[endgame][KNIGHT][square]* (opening_score - phase_score))/opening_score;
-					}
-					else{
-						score += positional_score[game_phase][KNIGHT][square];
+				//calculated score in game phases
 
-					}
+				score_opening += positional_score[opening][KNIGHT][square];
+				score_endgame += positional_score[endgame][KNIGHT][square];
 				break;
 			case n:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score -= (positional_score[opening][KNIGHT][mirror_score[square]] * phase_score+ positional_score[endgame][KNIGHT][mirror_score[square]]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score -= positional_score[game_phase][KNIGHT][mirror_score[square]];
-
-				}
+				//calculated score in game phases
+				score_opening -= positional_score[opening][KNIGHT][mirror_score[square]];
+				score_endgame -= positional_score[endgame][KNIGHT][mirror_score[square]];
 				break;
 			case B:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score += (positional_score[opening][BISHOP][square] * phase_score+ positional_score[endgame][BISHOP][square]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score += positional_score[game_phase][BISHOP][square];
-
-				}
+				//calculated score in game phases
+				score_opening += positional_score[opening][BISHOP][square];
+				score_endgame += positional_score[endgame][BISHOP][square];
 				//control square bonus
 				score += bit_count(get_bishop_attacks(square,occupancy[both]));
 				break;
 			case b:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score -= (positional_score[opening][BISHOP][mirror_score[square]] * phase_score+ positional_score[endgame][BISHOP][mirror_score[square]]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score -= positional_score[game_phase][BISHOP][mirror_score[square]];
-
-				}
+				//calculated score in game phases
+				score_opening -= positional_score[opening][BISHOP][mirror_score[square]];
+				score_endgame -= positional_score[endgame][BISHOP][mirror_score[square]];
 				//control square bonus
 				score -= bit_count(get_bishop_attacks(square,occupancy[both]));
 				break;
 			case R:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score += (positional_score[opening][ROOK][square] * phase_score+ positional_score[endgame][ROOK][square]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score += positional_score[game_phase][ROOK][square];
-
-				}
+				//calculated score in game phases
+				score_opening += positional_score[opening][ROOK][square];
+				score_endgame += positional_score[endgame][ROOK][square];
 				//semi open file
 				if ((bitboards[P] & file_mask[square])==0) {
 					score+= semi_open_file;
@@ -2810,14 +2771,9 @@ static inline int evaluate_position()
 				}
 				break;
 			case r:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score -= (positional_score[opening][ROOK][mirror_score[square]] * phase_score+ positional_score[endgame][ROOK][mirror_score[square]]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score -= positional_score[game_phase][ROOK][mirror_score[square]];
-
-				}
+				//calculated score in game phases
+				score_opening -= positional_score[opening][ROOK][mirror_score[square]];
+				score_endgame -= positional_score[endgame][ROOK][mirror_score[square]];
 				//semi open file
 				if ((bitboards[p] & file_mask[square])==0) {
 					score-= semi_open_file;
@@ -2828,14 +2784,9 @@ static inline int evaluate_position()
 				}
 				break;
 			case K:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score += (positional_score[opening][KING][square] * phase_score+ positional_score[endgame][KING][square]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score += positional_score[game_phase][KING][square];
-
-				}
+				//calculated score in game phases
+				score_opening += positional_score[opening][KING][square];
+				score_endgame += positional_score[endgame][KING][square];
 				//semi open file penaltie
 				if ((bitboards[P] & file_mask[square])==0) {
 					score-= semi_open_file;
@@ -2850,14 +2801,9 @@ static inline int evaluate_position()
 
 				break;
 			case k:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score -= (positional_score[opening][KING][mirror_score[square]] * phase_score+ positional_score[endgame][KING][mirror_score[square]]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score -= positional_score[game_phase][KING][mirror_score[square]];
-
-				}
+				//calculated score in game phases
+				score_opening -= positional_score[opening][KING][mirror_score[square]];
+				score_endgame -= positional_score[endgame][KING][mirror_score[square]];
 				//semi open file
 				if ((bitboards[p] & file_mask[square])==0) {
 					score+= semi_open_file;
@@ -2870,27 +2816,17 @@ static inline int evaluate_position()
 				score -= bit_count(king_attacks[square] & occupancy[black])*king_safety_bonus;
 				break;
 			case Q:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score += (positional_score[opening][QUEEN][square] * phase_score+ positional_score[endgame][QUEEN][square]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score += positional_score[game_phase][QUEEN][square];
-
-				}
+				//calculated score in game phases
+				score_opening += positional_score[opening][QUEEN][square];
+				score_endgame += positional_score[endgame][QUEEN][square];
 				//control square bonus
 				score += bit_count(get_queen_attacks(square,occupancy[both]));
 
 				break;
 			case q:
-				if (game_phase==middlegame){
-					//calculated score values between opening and endgame
-					score -= (positional_score[opening][QUEEN][mirror_score[square]] * phase_score+ positional_score[endgame][QUEEN][mirror_score[square]]* (opening_score - phase_score))/opening_score;
-				}
-				else{
-					score -= positional_score[game_phase][QUEEN][mirror_score[square]];
-
-				}
+				//calculated score in game phases
+				score_opening -= positional_score[opening][QUEEN][mirror_score[square]];
+				score_endgame -= positional_score[endgame][QUEEN][mirror_score[square]];
 				//control square bonus
 				score -= bit_count(get_queen_attacks(square,occupancy[both]));
 				break;
@@ -2904,6 +2840,21 @@ static inline int evaluate_position()
 			pop_bit(bitboard, square);
 		}
 
+	}
+
+	//get game phase scores based in current game phase
+	if (game_phase == middlegame) {
+		score = (score_opening * phase_score + score_endgame * (opening_score - phase_score)) / opening_score;
+	}
+
+	// return pure opening score in opening
+	else if (game_phase == opening) {
+		score = score_opening;
+	}
+
+	// return pure endgame score in engame
+	else if (game_phase == endgame) {
+		score = score_endgame;
 	}
 	//return evaluation based on color
 		return (color == white) ? score : -score;
@@ -2994,9 +2945,9 @@ int current_pv, score_pv;
 
 
 // number of entries for TT
-int hash_entries = 0;
+int tt_entries = 0;
 // hash table size
-#define hash_size 2680000
+
 
 //no hash constant
 
@@ -3016,19 +2967,47 @@ typedef struct {
 } tt;               // transposition table (hash table)
 
 // define tansposition table instance
-tt transposition_table[hash_size];
+tt *transposition_table= NULL;
 
 // empty tt (hash table)
 void clear_transposition_table()
 {
+	tt *hash_pointer;
 	// loop over tt elements
-	for (int index = 0; index < hash_size; index++)
+	for (hash_pointer = transposition_table; hash_pointer < tt_entries + transposition_table; hash_pointer++)
 	{
 		// reset tt elements
-		transposition_table[index].hash_key = 0;
-		transposition_table[index].depth = 0;
-		transposition_table[index].flag = 0;
-		transposition_table[index].score = 0;
+		hash_pointer->hash_key = 0;
+		hash_pointer->flag =0;
+		hash_pointer->depth = 0;
+		hash_pointer->score = 0;
+
+	}
+}
+//initialize transposition table with dynamic allocate memory
+void init_transposition_table(int mb) {
+	//init tt size
+	int tt_size= 0x100000 * mb;
+
+	//init number of entries in the tt
+	tt_entries = tt_size / sizeof(tt);
+	//clear tt if its already occupied
+	if (transposition_table != NULL) {
+		free(transposition_table);
+	}
+	//allocate dynamic memory
+	transposition_table = (tt*)malloc(tt_entries * sizeof(tt));
+
+	//if memory allocation fail
+	if (transposition_table == NULL) {
+		//try allocating half size memory
+		init_transposition_table(mb/2);
+	}
+	//if memory allocation is done
+	else {
+		clear_transposition_table();
+
+
 	}
 }
 
@@ -3037,7 +3016,7 @@ void clear_transposition_table()
 static inline int read_hash_tt(int alpha, int beta, int depth) {
 
 	//initialize tt pointer that store specific hash entry (current board info)
-	tt* hash_pointer=&transposition_table[hash_key % hash_size];
+	tt* hash_pointer=&transposition_table[hash_key % tt_entries];
 
 	//check we are in the correct position
 	if (hash_pointer->hash_key == hash_key) {
@@ -3083,7 +3062,7 @@ static inline int read_hash_tt(int alpha, int beta, int depth) {
 static inline void record_hash_to_tt(int score,int depth,int hash_flag) {
 
 	//initialize tt pointer that store specific hash entry (current board info)
-	tt* hash_pointer=&transposition_table[hash_key % hash_size];
+	tt* hash_pointer=&transposition_table[hash_key % tt_entries];
 
 
 	// record independent score from actual path from root node  to current node
@@ -4047,6 +4026,12 @@ void parse_go(char* command)
 void uci_loop()
 {
 
+	//Max size for tt
+	int max_tt = 128;
+
+	//default tt table size is 64MB
+	int mb = 64;
+
 	//initialize user/gui input buffer
 	char input_buffer[2000];
 
@@ -4059,6 +4044,7 @@ void uci_loop()
 	//print engine info
 	printf("id name Chess Engine\n");
 	printf("id author alvjimper\n");
+	printf("option name Hash type spin default 64 min 4 max %d\n", max_tt);
 	printf("uciok\n");
 
 
@@ -4130,6 +4116,18 @@ void uci_loop()
 			printf("uciok\n");
 			continue;
 		}
+		else if (!strncmp(input_buffer, "setoption name Hash value ", 26)) {
+			//initialize MB
+			sscanf(input_buffer,"%*s %*s %*s %*s %d", &mb);
+
+			// adjust MB if transposition table is out of bounds
+			if(mb < 4) mb = 4;
+			if(mb > max_tt) mb = max_tt;
+
+			// set transposition table size in MB
+			printf("    Set hash table size to %dMB\n", mb);
+			init_transposition_table(mb);
+		}
 
 
 
@@ -4162,8 +4160,8 @@ void init_all()
 	//initialize random keys
 	init_random_keys();
 
-	//clear transposition table
-	clear_transposition_table();
+	//initialize transposition table with default 64 MB
+	init_transposition_table(64);
 
 	//initialize evaluation mask
 	init_evaluation_mask();
@@ -4183,6 +4181,8 @@ int main()
 		parse_fen( start_position);
 		print_board();
 		printf("score: %d\n",evaluate_position());
+
+		free(transposition_table);
 
 
 
