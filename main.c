@@ -17,8 +17,7 @@
 #define empty "8/8/8/8/8/8/8/8 b - -"
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 #define tricky_position   "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
-#define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/2P1P3/RNBQKBNR w KQkq a3 0 1"
-#define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9"
+
 
 //enumerate board squares
 enum {
@@ -328,20 +327,21 @@ static inline int bit_count(U64 bitboard)
 	}
 	return count;
 }
-
-
+//1047
+//3235
 //get LS1B Index
-//#define LS1B_index(bitboard) __builtin_ctzll(bitboard) ��compilador gcc
-static inline int get_lsb_index(U64 bitboard) {
+#define get_lsb_index(bitboard) __builtin_ctzll(bitboard)
+/*static inline int get_lsb_index(U64 bitboard) {
 	// If bitboard is 0 return -1(illegal index)
 	if (bitboard)
 	{	//_BitScanForward64(&index,bitboard) only in VSMC
 		return bit_count((bitboard & (~bitboard + 1)) - 1);
 	}
-	else
+	else {
 		return -1;
+	}
 
-}
+}*/
 
 
 
@@ -3783,6 +3783,8 @@ static inline int negamax(int alpha, int beta, int depth)
 //search position for best move
 void search_position(int depth)
 {
+	//initialize start time
+	int start = get_time_ms();
 
 	//initialize score
 	int score = 0;
@@ -3844,13 +3846,13 @@ void search_position(int depth)
 		if (pv_length[0]) {
 			//Ttwo first options mate found for white and blacks, third option no mate yet.(whe divide/2 to transform plies aka half moves to full moves till mate. hte +-1 is to adjust distance in each color)
 			if (score > -mate_value && score < -mate_score)
-				printf("info score mate %d depth %d nodes %lld time %d pv ", -(score + mate_value) / 2 - 1, current_depth, nodes, get_time_ms() - starttime);
+				printf("info score mate %d depth %d nodes %lld time %d pv ", -(score + mate_value) / 2 - 1, current_depth, nodes, get_time_ms() - start);
 
 			else if (score > mate_score && score < mate_value)
-				printf("info score mate %d depth %d nodes %lld time %d pv ", (mate_value - score) / 2 + 1, current_depth, nodes, get_time_ms() - starttime);
+				printf("info score mate %d depth %d nodes %lld time %d pv ", (mate_value - score) / 2 + 1, current_depth, nodes, get_time_ms() - start);
 
 			else
-				printf("info score cp %d depth %d nodes %lld time %d pv ", score, current_depth, nodes, get_time_ms() - starttime);
+				printf("info score cp %d depth %d nodes %lld time %d pv ", score, current_depth, nodes, get_time_ms() - start);
 
 			//loop over principal variation
 			for (int count = 0; count < pv_length[0]; count++)
@@ -4296,7 +4298,7 @@ int main()
 	init_all();
 
 	//debug mode variable
-	int debug_mode = 0;
+	int debug_mode = 1;
 
 	//if debug mode is on
 	if (debug_mode)
