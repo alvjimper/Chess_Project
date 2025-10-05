@@ -4293,27 +4293,12 @@ int main()
 	//initialize all
 	init_all();
 
-	//debug mode variable
-	int debug_mode = 0;
-
-	//if debug mode is on
-	if (debug_mode)
-	{
-		parse_fen(tricky_position);
-		print_board();
-		search_position(10);
-
-		free(transposition_table);
 
 
+	//connect to GUI
+	uci_loop();
 
-	}
-	else
-	{
-		//connect to GUI
-		uci_loop();
 
-	}
 
 
 
