@@ -2877,7 +2877,7 @@ static inline int evaluate_position()
 
 	}
 
-	//get game phase scores based in current game phase
+	//get game phase interpolated scores based in current game phase
 	if (game_phase == middlegame) {
 		score = (score_opening * phase_score + score_endgame * (opening_score - phase_score)) / opening_score;
 	}
@@ -3296,7 +3296,6 @@ void print_move_scores(moves* move_list)
 }
 
 //history repetition detection
-
 static inline int rep_detection() {
 	//loop over history index
 	for (int index = 0; index < history_index; index++) {
@@ -3309,9 +3308,6 @@ static inline int rep_detection() {
 
 	//if no repetition
 	return 0;
-
-
-
 
 }
 
@@ -4133,7 +4129,7 @@ void parse_go(char* command)
 
 	// if depth is not available
 	if(depth == -1)
-		// set depth to 64 plies (takes ages to complete...)
+		// set depth to 64 plies (take ages to complete)
 			depth = 64;
 
 	// print debug info
@@ -4298,12 +4294,12 @@ int main()
 	init_all();
 
 	//debug mode variable
-	int debug_mode = 1;
+	int debug_mode = 0;
 
 	//if debug mode is on
 	if (debug_mode)
 	{
-		parse_fen( start_position);
+		parse_fen(tricky_position);
 		print_board();
 		search_position(10);
 
