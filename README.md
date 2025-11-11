@@ -1,4 +1,4 @@
-1. Ejecute la GUI escogida
+1. Ejecute la GUI escogida, en mi caso he usado ArenaChess
  <img width="797" height="553" alt="image" src="https://github.com/user-attachments/assets/f55876fc-3092-4649-bbba-8f0c97961413" />
 
 
